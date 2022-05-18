@@ -6,6 +6,41 @@ import cv2
 
 from TPSwarping import WarpImage_TPS
 
+
+def load_and_tps_warp(img_id, coco_annotation):
+    img_info = coco_annotation.loadImgs([img_id])[0]
+    img_file_name = img_info["file_name"]
+    img_url = img_info["coco_url"]
+
+    ann_ids = coco_annotation.getAnnIds(imgIds=[img_id], iscrowd=None)
+    anns = coco_annotation.loadAnns(ann_ids)
+
+    # Use URL to load image.
+    resp = requests.get(img_url, stream=True).raw
+    image = np.asarray(bytearray(resp.read()), dtype="uint8")
+    im = cv2.imdecode(image, cv2.IMREAD_COLOR)
+
+    # Get segmentation points (x,y) and draw them to the image.
+    segmentation = np.array(anns[0]['segmentation'][0]).reshape(-1, 2)
+    for i in range(segmentation.shape[0]):
+        x, y = list(segmentation[i,:])
+        cv2.circle(im, (int(x), int(y)), 3, [255, 0, 0])
+    cv2.imshow('Original image', im)
+    cv2.waitKey(0)
+
+    # Make target for TPS to be randomly added noise around segmentation points.
+    source = segmentation.copy()
+    target = segmentation.copy()
+    target = target - np.random.randint(-10, 11, size=target.shape)
+
+    # Warp image using source and target points utilizing thin plate spline.
+    new_im, new_pts1, new_pts2 = WarpImage_TPS(source, target, im)
+
+    # Show resulting distorted image.
+    cv2.imshow('Image with distorted shape', new_im)
+    cv2.waitKey(0)
+    return im, new_im
+
 if __name__ == '__main__':
     coco_annotation_file_path = "/media/lassi/Data/datasets/coco/annotations/instances_val2017.json"
 
@@ -33,30 +68,6 @@ if __name__ == '__main__':
 
     # Pick one image.
     img_id = img_ids[2]
-    img_info = coco_annotation.loadImgs([img_id])[0]
-    img_file_name = img_info["file_name"]
-    img_url = img_info["coco_url"]
 
-    # Get all the annotations for the specified image.
-    ann_ids = coco_annotation.getAnnIds(imgIds=[img_id], iscrowd=None)
-    anns = coco_annotation.loadAnns(ann_ids)
-
-    # Use URL to load image.
-    resp = requests.get(img_url, stream=True).raw
-    image = np.asarray(bytearray(resp.read()), dtype="uint8")
-    im = cv2.imdecode(image, cv2.IMREAD_COLOR)
-
-    segmentation = np.array(anns[0]['segmentation'][0]).reshape(-1, 2)
-    for i in range(segmentation.shape[0]):
-        x, y = list(segmentation[i,:])
-        cv2.circle(im, (int(x), int(y)), 3, [255, 0, 0])
-    cv2.imshow('Original image', im)
-    cv2.waitKey(0)
-
-    source = segmentation.copy()
-    target = segmentation.copy()
-    target = target - np.random.randint(-5, 6, size=target.shape)
-
-    new_im, new_pts1, new_pts2 = WarpImage_TPS(source, target, im)
-    cv2.imshow('Image with distorted shape', new_im)
-    cv2.waitKey(0)
+    # Load and show image and the resulting warped image
+    load_and_tps_warp(img_id, coco_annotation)

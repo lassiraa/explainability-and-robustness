@@ -1,4 +1,3 @@
-#%%
 import numpy as np
 import cv2
 
@@ -20,7 +19,7 @@ def WarpImage_TPS(source,target,img):
 	# get the warp kps in for source and target
 	tps.estimateTransformation(source, target, matches)  # note it is source --> target
 	# there is a bug here, applyTransformation must receive np.float32 data type
-	f32_pts = np.zeros(source.shape, dtype=np.float32)
+	f32_pts = source.astype(np.float32)#np.zeros(source.shape, dtype=np.float32)
 	f32_pts[:] = source[:]
 	transform_cost, new_pts1 = tps.applyTransformation(f32_pts)  # e.g., 1 x 4 x 2
 	f32_pts = np.zeros(target.shape, dtype=np.float32)

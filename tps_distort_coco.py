@@ -8,6 +8,9 @@ from transformers import AutoFeatureExtractor, ViTForImageClassification
 from TPSwarping import WarpImage_TPS
 
 
+rng = np.random.default_rng(51)
+
+
 def load_and_tps_warp(img_id, coco_annotation):
     img_info = coco_annotation.loadImgs([img_id])[0]
     img_file_name = img_info["file_name"]
@@ -21,23 +24,25 @@ def load_and_tps_warp(img_id, coco_annotation):
     resp = requests.get(img_url, stream=True).raw
     image = np.asarray(bytearray(resp.read()), dtype="uint8")
     im = cv2.imdecode(image, cv2.IMREAD_COLOR)
-    # Uncomment if image should be masked
-    # im = im * mask[..., None]
+    # Blur background
+    blurred_im = cv2.GaussianBlur(im, (21, 21), 0)
+    #im = im * mask[..., None]
+    im = np.where(mask[..., None] == 1, im, blurred_im)
 
     # Get segmentation points (x,y) and draw them to the image.
     segmentation = np.array(anns[0]['segmentation'][0]).reshape(-1, 2)
-    for i in range(segmentation.shape[0]):
-        x, y = list(segmentation[i,:])
-        cv2.circle(im, (int(x), int(y)), 3, [255, 0, 0])
+    # for i in range(segmentation.shape[0]):
+    #     x, y = list(segmentation[i,:])
+    #     cv2.circle(im, (int(x), int(y)), 3, [255, 0, 0])
     cv2.imshow('Original image', im)
     cv2.waitKey(0)
 
     # Make target for TPS to be randomly added noise around segmentation points.
     target = segmentation.copy()
-    noise_strength = min(np.sqrt(anns[0]['area']) // 10, 20)
-    target = target - np.random.randint(-noise_strength,
-                                        noise_strength+1,
-                                        size=target.shape)
+    noise_strength = min(np.sqrt(anns[0]['area']) // 15, 10)
+    target = target - rng.integers(-noise_strength,
+                                   noise_strength+1,
+                                   size=target.shape)
 
     # Warp image using source and target points utilizing thin plate spline.
     new_im, new_pts1, new_pts2 = WarpImage_TPS(segmentation, target, im)
@@ -85,6 +90,3 @@ if __name__ == '__main__':
             im, dist_im = load_and_tps_warp(img_id, coco_annotation)
             classify_image(feature_extractor, model, im)
             classify_image(feature_extractor, model, dist_im)
-        #     break
-        # if i > 5:
-        #     break

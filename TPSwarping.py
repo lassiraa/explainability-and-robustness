@@ -53,37 +53,3 @@ def thin_plate_transform(x,y,offw,offh,imshape,shift_l=-0.05,shift_r=0.05,num_po
 		return newxy,newxy-np.dstack((x,y))
 	else:
 		return newxy
-
-if __name__ == '__main__':
-	# the correspondences need at least four points
-	Zp = np.array([[217, 39], [204, 95], [174, 223], [648, 402]]) # (x, y) in each row
-	Zs = np.array([[217, 39], [180, 120], [174, 223], [648, 402]])
-	im = cv2.imread('1.jpg')
-	r = 6
-
-	# draw parallel grids
-	for y in range(0, im.shape[0], 10):
-			im[y, :, :] = 255
-	for x in range(0, im.shape[1], 10):
-			im[:, x, :] = 255
-
-	new_im, new_pts1, new_pts2 = WarpImage_TPS(Zp, Zs, im)
-	new_pts1, new_pts2 = new_pts1.squeeze(), new_pts2.squeeze()
-	print(new_pts1, new_pts2)
-
-	# new_xy = thin_plate_transform(x=Zp[:, 0], y=Zp[:, 1], offw=3, offh=2, imshape=im.shape[0:2], num_points=4)
-
-	for p in Zp:
-		cv2.circle(im, (p[0], p[1]), r, [0, 0, 255])
-	for p in Zs:
-		cv2.circle(im, (p[0], p[1]), r, [255, 0, 0])
-	cv2.imshow('w', im)
-	cv2.waitKey(500)
-
-
-	for p in Zs:
-		cv2.circle(new_im, (p[0], p[1]), r, [255, 0, 0])
-	for p in new_pts1:
-		cv2.circle(new_im, (int(p[0]), int(p[1])), 3, [0, 0, 255])
-	cv2.imshow('w2', new_im)
-	cv2.waitKey(0)

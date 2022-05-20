@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import requests
 from pycocotools.coco import COCO
 import cv2
+from transformers import AutoFeatureExtractor, ViTForImageClassification
 
 from TPSwarping import WarpImage_TPS
 
@@ -14,11 +15,14 @@ def load_and_tps_warp(img_id, coco_annotation):
 
     ann_ids = coco_annotation.getAnnIds(imgIds=[img_id], iscrowd=None)
     anns = coco_annotation.loadAnns(ann_ids)
+    mask = coco_annotation.annToMask(anns[0])
 
     # Use URL to load image.
     resp = requests.get(img_url, stream=True).raw
     image = np.asarray(bytearray(resp.read()), dtype="uint8")
     im = cv2.imdecode(image, cv2.IMREAD_COLOR)
+    # Uncomment if image should be masked
+    # im = im * mask[..., None]
 
     # Get segmentation points (x,y) and draw them to the image.
     segmentation = np.array(anns[0]['segmentation'][0]).reshape(-1, 2)
@@ -29,19 +33,33 @@ def load_and_tps_warp(img_id, coco_annotation):
     cv2.waitKey(0)
 
     # Make target for TPS to be randomly added noise around segmentation points.
-    source = segmentation.copy()
     target = segmentation.copy()
-    target = target - np.random.randint(-10, 11, size=target.shape)
+    noise_strength = min(np.sqrt(anns[0]['area']) // 10, 20)
+    target = target - np.random.randint(-noise_strength,
+                                        noise_strength+1,
+                                        size=target.shape)
 
     # Warp image using source and target points utilizing thin plate spline.
-    new_im, new_pts1, new_pts2 = WarpImage_TPS(source, target, im)
+    new_im, new_pts1, new_pts2 = WarpImage_TPS(segmentation, target, im)
 
     # Show resulting distorted image.
     cv2.imshow('Image with distorted shape', new_im)
     cv2.waitKey(0)
     return im, new_im
 
+
+def classify_image(feature_extractor, model, image):
+    inputs = feature_extractor(images=image, return_tensors="pt")
+    outputs = model(**inputs)
+    logits = outputs.logits
+    # model predicts one of the 1000 ImageNet classes
+    predicted_class_idx = logits.argmax(-1).item()
+    print("Predicted class:", model.config.id2label[predicted_class_idx])
+
 if __name__ == '__main__':
+    feature_extractor = AutoFeatureExtractor.from_pretrained('facebook/deit-tiny-patch16-224')
+    model = ViTForImageClassification.from_pretrained('facebook/deit-tiny-patch16-224')
+
     coco_annotation_file_path = "/media/lassi/Data/datasets/coco/annotations/instances_val2017.json"
 
     coco_annotation = COCO(annotation_file=coco_annotation_file_path)
@@ -53,21 +71,20 @@ if __name__ == '__main__':
     cats = coco_annotation.loadCats(cat_ids)
     cat_names = [cat["name"] for cat in cats]
 
-    # Category ID -> Category Name.
-    query_id = cat_ids[0]
-    query_annotation = coco_annotation.loadCats([query_id])[0]
-    query_name = query_annotation["name"]
-    query_supercategory = query_annotation["supercategory"]
+    # Iterate through categories
+    for i, query_name in enumerate(cat_names):
+        # Get category ID
+        query_id = coco_annotation.getCatIds(catNms=[query_name])[0]
 
-    # Category Name -> Category ID.
-    query_name = cat_names[2]
-    query_id = coco_annotation.getCatIds(catNms=[query_name])[0]
+        # Get the ID of all the images containing the object of the category.
+        img_ids = coco_annotation.getImgIds(catIds=[query_id])
 
-    # Get the ID of all the images containing the object of the category.
-    img_ids = coco_annotation.getImgIds(catIds=[query_id])
-
-    # Pick one image.
-    img_id = img_ids[2]
-
-    # Load and show image and the resulting warped image
-    load_and_tps_warp(img_id, coco_annotation)
+        # Iterate through images within category
+        for img_i, img_id in enumerate(img_ids):
+            # Load and show image and the resulting warped image
+            im, dist_im = load_and_tps_warp(img_id, coco_annotation)
+            classify_image(feature_extractor, model, im)
+            classify_image(feature_extractor, model, dist_im)
+        #     break
+        # if i > 5:
+        #     break

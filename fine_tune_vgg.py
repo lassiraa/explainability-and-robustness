@@ -1,27 +1,17 @@
 import torchvision.models as models
 import torch
-from torchvision.transforms import ToTensor
+import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torchvision.datasets import CocoDetection
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
-from pycocotools.coco import COCO
+
+from utils import CocoToKHot
 
 
 path2data = "/media/lassi/Data/datasets/coco/images/val2017/"
 path2json = "/media/lassi/Data/datasets/coco/annotations/instances_val2017.json"
-
-coco = COCO(path2json)
-coco_cats = coco.getCatIds()
-
-
-def target_transform(targets: list, cats: list = coco_cats) -> np.ndarray:
-    khot_cats = np.zeros(80)
-    for target in targets:
-        khot_cats[cats.index(target['category_id'])] = 1
-    return khot_cats
-
 
 params = dict(
     lr=0.01,
@@ -29,11 +19,20 @@ params = dict(
     epochs=16
 )
 
+train_transform = transforms.Compose([
+    transforms.Resize(256),
+    transforms.RandomResizedCrop(224),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                         std=[0.229, 0.224, 0.225])
+])
+
 coco_dset = CocoDetection(
     root=path2data,
     annFile=path2json,
-    transform=ToTensor(),
-    target_transform=target_transform
+    transform=train_transform,
+    target_transform=CocoToKHot(path2json)
 )
 coco_dloader = DataLoader(
     coco_dset,

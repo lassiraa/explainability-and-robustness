@@ -1,3 +1,5 @@
+import time
+
 import torchvision.models as models
 import torch
 import torchvision.transforms as transforms
@@ -15,7 +17,7 @@ path2json = "/media/lassi/Data/datasets/coco/annotations/instances_val2017.json"
 
 params = dict(
     lr=0.01,
-    batch_size=16,
+    batch_size=64,
     epochs=16
 )
 
@@ -34,7 +36,7 @@ coco_dset = CocoDetection(
     transform=train_transform,
     target_transform=CocoToKHot(path2json)
 )
-coco_dloader = DataLoader(
+coco_loader = DataLoader(
     coco_dset,
     batch_size=params['batch_size'],
     shuffle=True,
@@ -60,8 +62,10 @@ optimizer = optim.SGD(params_to_update, lr=params['lr'])
 loss_fn = nn.BCEWithLogitsLoss()
 
 for epoch in range(params['epochs']):
+    t0 = time.time()
+    tr_loss = []
     model.train()
-    for inputs, labels in coco_dloader:
+    for inputs, labels in coco_loader:
         inputs = inputs.to(device)
         labels = labels.to(device)
 
@@ -72,3 +76,8 @@ for epoch in range(params['epochs']):
             loss = loss_fn(outputs, labels)
             loss.backward()
             optimizer.step()
+            tr_loss.append(loss.item())
+        
+    tr_loss = np.mean(tr_loss)
+    print(f'Time for epoch {epoch}: {time.time()-t0}')
+    print(f'Training loss {tr_loss}')

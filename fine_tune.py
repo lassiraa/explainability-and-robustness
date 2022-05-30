@@ -12,10 +12,6 @@ import numpy as np
 from utils import CocoToKHot
 
 
-path2data = "/media/lassi/Data/datasets/coco/images/val2017/"
-path2json = "/media/lassi/Data/datasets/coco/annotations/instances_val2017.json"
-
-
 def get_model_to_fine_tune(model_name: str, device: torch.device):
     assert model_name in ['vit_b_32', 'vgg16']
 
@@ -73,40 +69,47 @@ def fine_tune(model: nn.Module,
     return model
 
 
-params = dict(
-    lr=0.01,
-    batch_size=64,
-    epochs=16
-)
+if __name__ == '__main__':
 
-train_transform = transforms.Compose([
-    transforms.Resize(256),
-    transforms.RandomResizedCrop(224),
-    transforms.RandomHorizontalFlip(),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                         std=[0.229, 0.224, 0.225])
-])
+    path2data = "/media/lassi/Data/datasets/coco/images/val2017/"
+    path2json = "/media/lassi/Data/datasets/coco/annotations/instances_val2017.json"
+    model_name = 'vit_b_32'
 
-coco_dset = CocoDetection(
-    root=path2data,
-    annFile=path2json,
-    transform=train_transform,
-    target_transform=CocoToKHot(path2json)
-)
-coco_loader = DataLoader(
-    coco_dset,
-    batch_size=params['batch_size'],
-    shuffle=True,
-    drop_last=True
-)
+    training_params = dict(
+        lr=0.01,
+        batch_size=64,
+        epochs=16
+    )
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    train_transform = transforms.Compose([
+        transforms.Resize(256),
+        transforms.RandomResizedCrop(224),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                            std=[0.229, 0.224, 0.225])
+    ])
 
-model, params_to_update = get_model_to_fine_tune(
-    'vit_b_32', device
-)
+    coco_dset = CocoDetection(
+        root=path2data,
+        annFile=path2json,
+        transform=train_transform,
+        target_transform=CocoToKHot(path2json)
+    )
+    coco_loader = DataLoader(
+        coco_dset,
+        batch_size=training_params['batch_size'],
+        shuffle=True,
+        drop_last=True
+    )
 
-optimizer = optim.SGD(params_to_update, lr=params['lr'])
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-model = fine_tune(model, optimizer, coco_loader, params)
+    model, params_to_update = get_model_to_fine_tune(
+        model_name, device
+    )
+
+    optimizer = optim.SGD(params_to_update, lr=training_params['lr'])
+
+    model = fine_tune(model, optimizer, coco_loader, training_params)
+    model.save(f'{model_name}_coco.pt')

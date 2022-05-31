@@ -8,7 +8,7 @@ import numpy as np
 from utils import CocoDistortion
 
 
-def load_model(model_name: str, path_to_ft_model: str, device: torch.device):
+def load_model(model_name: str, device: torch.device):
     assert model_name in ['vit_b_32', 'vgg16']
 
     if model_name == 'vgg16':
@@ -19,7 +19,7 @@ def load_model(model_name: str, path_to_ft_model: str, device: torch.device):
         model = models.vit_b_32(pretrained=False)
         model.heads[0] = nn.Linear(768, 80)
     
-    model.load_state_dict(torch.load(path_to_ft_model))
+    model.load_state_dict(torch.load(f'{model_name}_coco.pt'))
     model.eval()
     model.to(device)
     return model
@@ -64,15 +64,13 @@ if __name__ == '__main__':
     )
     coco_loader = DataLoader(
         coco_dset,
-        batch_size=16,
+        batch_size=64,
         shuffle=False,
         drop_last=False
     )
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    model, params_to_update = load_model(
-        model_name, device
-    )
+    model = load_model(model_name, device)
 
     prob_diffs = measure_shape_robustness(model, coco_loader)

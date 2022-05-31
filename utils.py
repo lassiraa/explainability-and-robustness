@@ -54,7 +54,12 @@ class CocoDistortion(VisionDataset):
     def _load_target(self, id: int) -> List[Any]:
         return self.coco.loadAnns(self.coco.getAnnIds(id))
     
-    def _warp_image(self, image: Image.Image, segmentation: np.ndarray, area: float):
+    def _warp_image(
+        self,
+        image: Image.Image,
+        segmentation: np.ndarray,
+        area: float
+    ) -> Image.Image:
         target = segmentation.copy()
         noise_strength = min(np.sqrt(area) // 15, 10)
         target = target - rng.integers(-noise_strength,
@@ -69,27 +74,29 @@ class CocoDistortion(VisionDataset):
 
         self.tps.estimateTransformation(target, segmentation, matches)
 
-        distorted_image = self.tps.warpImage(image)
-        return distorted_image
+        distorted_image = self.tps.warpImage(np.array(image))
+        return Image.fromarray(distorted_image)
 
 
     def __getitem__(self, index: int) -> Tuple[Any, Any]:
         id = self.ids[index]
         image = self._load_image(id)
         anns = self._load_target(id)
-        # TODO: Add selection criteria for chosen segmentation
-        target_ann = anns[0]
-        segmentation = np.array(target_ann['segmentation'][0]).reshape(-1, 2)
-        area = target_ann['area']
-        image_distorted = self._warp_image(image, segmentation, area)
+        try:
+            target_ann = anns[0]
+            segmentation = np.array(target_ann['segmentation'][0]).reshape(-1, 2)
+            area = target_ann['area']
+            image_distorted = self._warp_image(image, segmentation, area)
+            target = np.zeros(self.num_categories)
+            idx = self.categories[target_ann['category_id']]
+            target[idx] = 1
+        except IndexError:
+            image_distorted = image
+            target = np.zeros(80)
 
         if self.transform is not None:
             image = self.transform(image)
             image_distorted = self.transform(image_distorted)
-        
-        target = np.zeros(self.num_categories)
-        idx = self.categories[target_ann['category_id']]
-        target[idx] = 1
 
         return image, image_distorted, target
 

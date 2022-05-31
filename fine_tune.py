@@ -72,8 +72,8 @@ def fine_tune(model: nn.Module,
 
 if __name__ == '__main__':
     model_name = 'vit_b_32'
-    path2data = "/media/lassi/Data/datasets/coco/images/val2017/"
-    path2json = "/media/lassi/Data/datasets/coco/annotations/instances_val2017.json"
+    path2data = "/media/lassi/Data/datasets/coco/images/train2017/"
+    path2json = "/media/lassi/Data/datasets/coco/annotations/instances_train2017.json"
 
     training_params = dict(
         lr=0.01,
@@ -112,4 +112,4 @@ if __name__ == '__main__':
     optimizer = optim.SGD(params_to_update, lr=training_params['lr'])
 
     model = fine_tune(model, optimizer, coco_loader, training_params)
-    model.save(f'{model_name}_coco.pt')
+    torch.save(model.state_dict(), f'{model_name}_coco.pt')

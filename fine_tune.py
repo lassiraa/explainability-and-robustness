@@ -49,6 +49,7 @@ def fine_tune(model: nn.Module,
         t0 = time.time()
         tr_loss = []
         model.train()
+        
         for inputs, labels in coco_loader:
             inputs = inputs.to(device)
             labels = labels.to(device)
@@ -70,10 +71,9 @@ def fine_tune(model: nn.Module,
 
 
 if __name__ == '__main__':
-
+    model_name = 'vit_b_32'
     path2data = "/media/lassi/Data/datasets/coco/images/val2017/"
     path2json = "/media/lassi/Data/datasets/coco/annotations/instances_val2017.json"
-    model_name = 'vit_b_32'
 
     training_params = dict(
         lr=0.01,

@@ -43,6 +43,9 @@ class CocoDistortion(VisionDataset):
         self.coco = COCO(annFile)
         self.ids = list(sorted(self.coco.imgs.keys()))
         self.tps = cv2.createThinPlateSplineShapeTransformer()
+        categories = self.coco.getCatIds()
+        self.num_categories = len(categories)
+        self.categories = {cat: idx for idx, cat in enumerate(categories)}
 
     def _load_image(self, id: int) -> Image.Image:
         path = self.coco.loadImgs(id)[0]["file_name"]
@@ -83,9 +86,10 @@ class CocoDistortion(VisionDataset):
         if self.transform is not None:
             image = self.transform(image)
             image_distorted = self.transform(image_distorted)
-
-        if self.target_transform is not None:
-            target = self.target_transform(target_ann)
+        
+        target = np.zeros(self.num_categories)
+        idx = self.categories[target_ann['category_id']]
+        target[idx] = 1
 
         return image, image_distorted, target
 

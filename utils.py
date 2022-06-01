@@ -1,5 +1,6 @@
 from typing import Any, Callable, Optional, Tuple, List
 import os
+import json
 
 import numpy as np
 import cv2
@@ -34,6 +35,7 @@ class CocoDistortion(VisionDataset):
         self,
         root: str,
         annFile: str,
+        imToAnnFile: str,
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
         transforms: Optional[Callable] = None
@@ -41,7 +43,13 @@ class CocoDistortion(VisionDataset):
         super().__init__(root, transforms, transform, target_transform)
 
         self.coco = COCO(annFile)
-        self.ids = list(sorted(self.coco.imgs.keys()))
+        with open(imToAnnFile, 'r') as rf:
+            self.im_to_ann = json.load(rf)
+            self.im_to_ann = {
+                int(img_id): ann_id
+                for img_id, ann_id in self.im_to_ann.items()
+            }
+        self.ids = list(sorted(self.im_to_ann.keys()))
         self.tps = cv2.createThinPlateSplineShapeTransformer()
         categories = self.coco.getCatIds()
         self.num_categories = len(categories)
@@ -52,7 +60,7 @@ class CocoDistortion(VisionDataset):
         return Image.open(os.path.join(self.root, path)).convert("RGB")
 
     def _load_target(self, id: int) -> List[Any]:
-        return self.coco.loadAnns(self.coco.getAnnIds(id))
+        return self.coco.loadAnns(self.im_to_ann[id])[0]
     
     def _warp_image(
         self,
@@ -81,18 +89,13 @@ class CocoDistortion(VisionDataset):
     def __getitem__(self, index: int) -> Tuple[Any, Any]:
         id = self.ids[index]
         image = self._load_image(id)
-        anns = self._load_target(id)
-        try:
-            target_ann = anns[0]
-            segmentation = np.array(target_ann['segmentation'][0]).reshape(-1, 2)
-            area = target_ann['area']
-            image_distorted = self._warp_image(image, segmentation, area)
-            target = np.zeros(self.num_categories)
-            idx = self.categories[target_ann['category_id']]
-            target[idx] = 1
-        except IndexError:
-            image_distorted = image
-            target = np.zeros(80)
+        target_ann = self._load_target(id)
+        segmentation = np.array(target_ann['segmentation'][0]).reshape(-1, 2)
+        area = target_ann['area']
+        image_distorted = self._warp_image(image, segmentation, area)
+        target = np.zeros(self.num_categories)
+        idx = self.categories[target_ann['category_id']]
+        target[idx] = 1
 
         if self.transform is not None:
             image = self.transform(image)

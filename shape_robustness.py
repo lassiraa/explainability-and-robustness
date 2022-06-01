@@ -46,6 +46,7 @@ if __name__ == '__main__':
     model_name = 'vit_b_32'
     path2data = "/media/lassi/Data/datasets/coco/images/val2017/"
     path2json = "/media/lassi/Data/datasets/coco/annotations/instances_val2017.json"
+    path2idjson = "data/image_to_annotation.json"
     path2model = f'{model_name}_coco.pt'
 
     val_transform = transforms.Compose([
@@ -59,6 +60,7 @@ if __name__ == '__main__':
     coco_dset = CocoDistortion(
         root=path2data,
         annFile=path2json,
+        imToAnnFile=path2idjson,
         transform=val_transform,
         target_transform=None
     )

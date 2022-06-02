@@ -27,26 +27,31 @@ def load_model(model_name: str, device: torch.device):
 
 def measure_shape_robustness(model: nn.Module,
                              coco_loader: DataLoader):
-    prob_diffs = np.zeros((len(coco_loader.dataset), 80))
+    preds = np.zeros((len(coco_loader.dataset), 80))
+    preds_dist = np.zeros((len(coco_loader.dataset), 80))
+    classes = np.zeros((len(coco_loader.dataset), 80))
     batch = coco_loader.batch_size
 
-    for i, (inputs, distorted_inputs, labels) in enumerate(coco_loader):
-        inputs = inputs.to(device)
-        distorted_inputs = distorted_inputs.to(device)
-        labels = labels.to(device)
-        outputs = model(inputs)
-        distorted_outputs = model(distorted_inputs)
-        prob_diff = (outputs - distorted_outputs) * labels
-        prob_diffs[i*batch:(i+1)*batch] = prob_diff.cpu().detach().numpy()
+    with torch.no_grad():
+
+        for i, (inputs, distorted_inputs, labels) in enumerate(coco_loader):
+            inputs = inputs.to(device)
+            distorted_inputs = distorted_inputs.to(device)
+            labels = labels.to(device)
+            outputs = model(inputs)
+            distorted_outputs = model(distorted_inputs)
+            preds[i*batch:(i+1)*batch] = outputs.cpu().detach().numpy()
+            preds_dist[i*batch:(i+1)*batch] = distorted_outputs.cpu().detach().numpy()
+            classes[i*batch:(i+1)*batch] = labels.cpu().detach().numpy()
     
-    return prob_diffs
+    return preds, preds_dist, classes
 
 
 if __name__ == '__main__':
-    model_name = 'vit_b_32'
-    path2data = "/media/lassi/Data/datasets/coco/images/val2017/"
-    path2json = "/media/lassi/Data/datasets/coco/annotations/instances_val2017.json"
-    path2idjson = "data/image_to_annotation.json"
+    model_name = 'vgg16'
+    path2data = '/media/lassi/Data/datasets/coco/images/val2017/'
+    path2json = '/media/lassi/Data/datasets/coco/annotations/instances_val2017.json'
+    path2idjson = 'data/image_to_annotation.json'
     path2model = f'{model_name}_coco.pt'
 
     val_transform = transforms.Compose([
@@ -66,7 +71,7 @@ if __name__ == '__main__':
     )
     coco_loader = DataLoader(
         coco_dset,
-        batch_size=64,
+        batch_size=100,
         shuffle=False,
         drop_last=False
     )
@@ -75,4 +80,7 @@ if __name__ == '__main__':
 
     model = load_model(model_name, device)
 
-    prob_diffs = measure_shape_robustness(model, coco_loader)
+    preds, preds_dist, classes = measure_shape_robustness(model, coco_loader)
+    np.save(f'data/{model_name}_preds.npy', preds)
+    np.save(f'data/{model_name}_preds_dist.npy', preds_dist)
+    np.save(f'data/{model_name}_classes.npy', classes)

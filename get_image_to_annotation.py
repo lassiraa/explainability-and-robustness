@@ -69,7 +69,9 @@ if __name__ == '__main__':
             bb_object['y1'] = ann['bbox'][1]
             bb_object['y2'] = ann['bbox'][1] + ann['bbox'][3]
             per = get_percent_within_center(bb_center_crop, bb_object)
-            if per > 0.75:
+            #  Also check proper formatted segmentation exists for annotation
+            if per > 0.75 and len(ann['segmentation']) > 0 \
+                    and isinstance(ann['segmentation'], list):
                 img_to_ann[id] = ann['id']
     
     #  Save image to annotation dictionary as json

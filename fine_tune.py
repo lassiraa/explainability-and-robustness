@@ -4,17 +4,14 @@ import torchvision.models as models
 import torch
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
-from torchvision.datasets import CocoDetection
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 
-from utils import CocoToKHot
+from utils import CocoClassification
 
 
 def get_model_to_fine_tune(model_name: str, device: torch.device):
-    assert model_name in ['vit_b_32', 'vgg16']
-
     if model_name == 'vgg16':
         model = models.vgg16(pretrained=True)
         #  Using feature extraction so only output layer is fine-tuned
@@ -41,44 +38,80 @@ def get_model_to_fine_tune(model_name: str, device: torch.device):
 
 def fine_tune(model: nn.Module,
               optimizer: optim.SGD,
-              coco_loader: DataLoader,
-              params: dict):
+              coco_loader_train: DataLoader,
+              coco_loader_val: DataLoader,
+              params: dict,
+              model_name: str):
     loss_fn = nn.BCEWithLogitsLoss()
 
     for epoch in range(params['epochs']):
         t0 = time.time()
         tr_loss = []
+        val_loss = []
+
         model.train()
         
-        for inputs, labels in coco_loader:
+        for inputs, labels in coco_loader_train:
             inputs = inputs.to(device)
             labels = labels.to(device)
 
             optimizer.zero_grad()
 
-            with torch.set_grad_enabled(True):
+            outputs = model(inputs)
+            loss = loss_fn(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            tr_loss.append(loss.item())
+
+        model.eval()
+
+        with torch.no_grad():
+
+            for inputs, labels in coco_loader_val:
+                inputs = inputs.to(device)
+                labels = labels.to(device)
+
+                optimizer.zero_grad()
+
                 outputs = model(inputs)
                 loss = loss_fn(outputs, labels)
-                loss.backward()
-                optimizer.step()
-                tr_loss.append(loss.item())
+                val_loss.append(loss.item())
+
             
         tr_loss = np.mean(tr_loss)
+        val_loss = np.mean(val_loss)
+        torch.save(model.state_dict(), f'{model_name}_coco.pt')
         print(f'Time for epoch {epoch}: {time.time()-t0}')
-        print(f'Training loss {tr_loss}')
+        print(f'Tr. loss {tr_loss} | Val. loss {val_loss}')
     
     return model
 
 
 if __name__ == '__main__':
-    model_name = 'vit_b_32'
-    path2data = "/media/lassi/Data/datasets/coco/images/train2017/"
-    path2json = "/media/lassi/Data/datasets/coco/annotations/instances_train2017.json"
+    import argparse
+    parser = argparse.ArgumentParser(description='Finetune network')
+    parser.add_argument('--images_dir', type=str,
+                        default='/media/lassi/Data/datasets/coco/images/',
+                        help='path to coco root directory containing image folders')
+    parser.add_argument('--ann_dir', type=str,
+                        default='/media/lassi/Data/datasets/coco/annotations/',
+                        help='path to root directory containing annotations')
+    parser.add_argument('--lr', type=float, default=0.02, help='learning rate')
+    parser.add_argument('--epochs', type=int, default=26,
+                        help='number of training iterations')
+    parser.add_argument('--batch_size', type=int, default=64,
+                        help='batch size for training')
+    parser.add_argument('--num_workers', type=int, default=8,
+                        help='workers for dataloader')
+    parser.add_argument('--model_name', type=str, default='vit_b_32',
+                        help='name of model used for training',
+                        choices=['vit_b_32', 'vgg16'])
+    args = parser.parse_args()
 
     training_params = dict(
-        lr=0.01,
-        batch_size=64,
-        epochs=16
+        lr=args.lr,
+        batch_size=args.batch_size,
+        epochs=args.epochs
     )
 
     train_transform = transforms.Compose([
@@ -89,27 +122,56 @@ if __name__ == '__main__':
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
                             std=[0.229, 0.224, 0.225])
     ])
+    val_transform = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                            std=[0.229, 0.224, 0.225])
+    ])
 
-    coco_dset = CocoDetection(
-        root=path2data,
-        annFile=path2json,
+
+    coco_dset_train = CocoClassification(
+        root=args.images_dir + 'train2017/',
+        annFile=args.ann_dir + 'instances_train2017.json',
         transform=train_transform,
-        target_transform=CocoToKHot(path2json)
+        target_transform=None
     )
-    coco_loader = DataLoader(
-        coco_dset,
+    coco_loader_train = DataLoader(
+        coco_dset_train,
         batch_size=training_params['batch_size'],
         shuffle=True,
-        drop_last=True
+        drop_last=True,
+        num_workers=args.num_workers
     )
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    coco_dset_val = CocoClassification(
+        root=args.images_dir + 'val2017/',
+        annFile=args.ann_dir + 'instances_val2017.json',
+        transform=val_transform,
+        target_transform=None
+    )
+    coco_loader_val = DataLoader(
+        coco_dset_val,
+        batch_size=training_params['batch_size'],
+        shuffle=False,
+        drop_last=False,
+        num_workers=args.num_workers
+    )
+
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     model, params_to_update = get_model_to_fine_tune(
-        model_name, device
+        args.model_name, device
     )
 
     optimizer = optim.SGD(params_to_update, lr=training_params['lr'])
 
-    model = fine_tune(model, optimizer, coco_loader, training_params)
-    torch.save(model.state_dict(), f'{model_name}_coco.pt')
+    model = fine_tune(
+        model=model,
+        optimizer=optimizer,
+        coco_loader_train=coco_loader_train,
+        coco_loader_val=coco_loader_val,
+        params=training_params,
+        model_name=args.model_name
+    )

@@ -31,6 +31,7 @@ def measure_shape_robustness(model: nn.Module,
     preds_dist = np.zeros((len(coco_loader.dataset), 80))
     classes = np.zeros((len(coco_loader.dataset), 80))
     batch = coco_loader.batch_size
+    activation = nn.Sigmoid()
 
     with torch.no_grad():
 
@@ -38,8 +39,8 @@ def measure_shape_robustness(model: nn.Module,
             inputs = inputs.to(device)
             distorted_inputs = distorted_inputs.to(device)
             labels = labels.to(device)
-            outputs = model(inputs)
-            distorted_outputs = model(distorted_inputs)
+            outputs = activation(model(inputs))
+            distorted_outputs = activation(model(distorted_inputs))
             preds[i*batch:(i+1)*batch] = outputs.cpu().detach().numpy()
             preds_dist[i*batch:(i+1)*batch] = distorted_outputs.cpu().detach().numpy()
             classes[i*batch:(i+1)*batch] = labels.cpu().detach().numpy()
@@ -73,7 +74,8 @@ if __name__ == '__main__':
         coco_dset,
         batch_size=100,
         shuffle=False,
-        drop_last=False
+        drop_last=False,
+        num_workers=16
     )
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

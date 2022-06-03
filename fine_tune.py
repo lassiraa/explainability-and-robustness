@@ -41,7 +41,8 @@ def fine_tune(model: nn.Module,
               coco_loader_train: DataLoader,
               coco_loader_val: DataLoader,
               params: dict,
-              model_name: str):
+              model_name: str,
+              device: torch.device):
     loss_fn = nn.BCEWithLogitsLoss()
 
     for epoch in range(params['epochs']):
@@ -173,5 +174,6 @@ if __name__ == '__main__':
         coco_loader_train=coco_loader_train,
         coco_loader_val=coco_loader_val,
         params=training_params,
-        model_name=args.model_name
+        model_name=args.model_name,
+        device=device
     )

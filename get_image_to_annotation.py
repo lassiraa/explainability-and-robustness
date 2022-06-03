@@ -73,6 +73,7 @@ if __name__ == '__main__':
             if per > 0.75 and len(ann['segmentation']) > 0 \
                     and isinstance(ann['segmentation'], list):
                 img_to_ann[id] = ann['id']
+                break
     
     #  Save image to annotation dictionary as json
     with open('data/image_to_annotation.json', 'w') as fp:

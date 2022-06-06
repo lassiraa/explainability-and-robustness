@@ -6,7 +6,9 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import ExponentialLR
 import numpy as np
+import wandb
 
 from utils import CocoClassification
 
@@ -37,12 +39,14 @@ def get_model_to_fine_tune(model_name: str, device: torch.device):
 
 
 def fine_tune(model: nn.Module,
-              optimizer: optim.SGD,
+              optimizer: optim.Adam,
+              scheduler: ExponentialLR,
               coco_loader_train: DataLoader,
               coco_loader_val: DataLoader,
               params: dict,
               model_name: str,
-              device: torch.device):
+              device: torch.device,
+              checkpoint_dir: str):
     loss_fn = nn.BCEWithLogitsLoss()
 
     for epoch in range(params['epochs']):
@@ -78,12 +82,24 @@ def fine_tune(model: nn.Module,
                 loss = loss_fn(outputs, labels)
                 val_loss.append(loss.item())
 
-            
+        scheduler.step()
         tr_loss = np.mean(tr_loss)
         val_loss = np.mean(val_loss)
-        torch.save(model.state_dict(), f'{model_name}_coco.pt')
+        wandb.log({
+            'tr_loss': tr_loss,
+            'val_loss': val_loss,
+            'lr': scheduler.get_last_lr()[0]
+        })
+        wandb.watch(model)
         print(f'Time for epoch {epoch}: {time.time()-t0}')
         print(f'Tr. loss {tr_loss} | Val. loss {val_loss}')
+
+        #  Save model state every 10 epochs
+        if (epoch + 1) % 10 == 0:
+            torch.save(
+                model.state_dict(),
+                f'{checkpoint_dir}{model_name}_coco_ep{epoch}.pt'
+            )
     
     return model
 
@@ -97,23 +113,38 @@ if __name__ == '__main__':
     parser.add_argument('--ann_dir', type=str,
                         default='/media/lassi/Data/datasets/coco/annotations/',
                         help='path to root directory containing annotations')
-    parser.add_argument('--lr', type=float, default=0.02, help='learning rate')
-    parser.add_argument('--epochs', type=int, default=26,
+    parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
+    parser.add_argument('--gamma', type=float, default=0.90,
+                        help='gamma for exponential lr scheduler')
+    parser.add_argument('--epochs', type=int, default=200,
                         help='number of training iterations')
     parser.add_argument('--batch_size', type=int, default=64,
                         help='batch size for training')
-    parser.add_argument('--num_workers', type=int, default=8,
+    parser.add_argument('--num_workers', type=int, default=16,
                         help='workers for dataloader')
     parser.add_argument('--model_name', type=str, default='vit_b_32',
                         help='name of model used for training',
                         choices=['vit_b_32', 'vgg16'])
+    parser.add_argument('--checkpoint_dir', type=str,
+                        default='/media/lassi/Data/checkpoints/model.pt',
+                        help='path to save checkpoint')
+    parser.add_argument('--wandb_entity', type=str)
+    parser.add_argument('--wandb_project', type=str)
     args = parser.parse_args()
 
     training_params = dict(
         lr=args.lr,
         batch_size=args.batch_size,
-        epochs=args.epochs
+        epochs=args.epochs,
+        gamma=args.gamma,
+        model_name=args.model_name
     )
+    wandb.init(
+        project=args.wandb_project,
+        entity=args.wandb_entity,
+        name=f'{args.model_name}-lr{args.lr}-gam{args.gamma}'
+    )
+    wandb.config = training_params
 
     train_transform = transforms.Compose([
         transforms.Resize(256),
@@ -166,14 +197,17 @@ if __name__ == '__main__':
         args.model_name, device
     )
 
-    optimizer = optim.SGD(params_to_update, lr=training_params['lr'])
+    optimizer = optim.Adam(params_to_update, lr=training_params['lr'])
+    scheduler = ExponentialLR(optimizer, gamma=0.9)
 
     model = fine_tune(
         model=model,
         optimizer=optimizer,
+        scheduler=scheduler,
         coco_loader_train=coco_loader_train,
         coco_loader_val=coco_loader_val,
         params=training_params,
         model_name=args.model_name,
-        device=device
+        device=device,
+        checkpoint_dir=args.checkpoint_dir
     )

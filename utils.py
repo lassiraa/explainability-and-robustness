@@ -12,6 +12,24 @@ from PIL import Image
 rng = np.random.default_rng(51)
 
 
+def calculate_perpendicular_translation(
+    idx: int,
+    segmentation: np.ndarray,
+    magnitude: float
+    ) -> np.ndarray:
+    point = segmentation[idx,:]
+    prev = segmentation[idx-1,:]
+    next_idx = idx + 1 \
+        if idx < segmentation.shape[0] - 1 \
+        else 0
+    next = segmentation[next_idx,:]
+    v = (point - prev) + (point - next)
+    norm = np.sqrt(np.sum(v**2))
+    if norm == 0:
+        return point
+    return np.rint((v / norm) * magnitude)
+
+
 class CocoClassification(VisionDataset):
     def __init__(
         self,

@@ -97,13 +97,14 @@ class CocoDistortion(VisionDataset):
         area: float
     ) -> Image.Image:
         target = segmentation.copy()
-        noise_strength = max(min(np.sqrt(area) // 15, 8), 2)
+        noise_strength = max(min(np.sqrt(area) // 20, 6), 1)
         target = target - rng.integers(-noise_strength,
                                        noise_strength+1,
                                        size=target.shape)
         segmentation = segmentation.reshape(-1, len(segmentation), 2)
         target = target.reshape(-1, len(target), 2)
-        matches=list()
+        
+        matches=[]
 
         for i in range(0,len(segmentation[0])):
             matches.append(cv2.DMatch(i,i,0))
@@ -118,6 +119,13 @@ class CocoDistortion(VisionDataset):
         image = self._load_image(id)
         target_ann = self._load_target(id)
         segmentation = np.array(target_ann['segmentation'][0]).reshape(-1, 2)
+        #  Following is for test purposes in example visualization
+        # print(self.coco.loadCats(target_ann['category_id']))
+        # image = np.array(image)
+        # for i in range(segmentation.shape[0]):
+        #     x, y = list(segmentation[i,:])
+        #     cv2.circle(image, (int(x), int(y)), 3, [255, 0, 0])
+        # image = Image.fromarray(image)
         area = target_ann['area']
         image_distorted = self._warp_image(image, segmentation, area)
         target = np.zeros(self.num_categories)

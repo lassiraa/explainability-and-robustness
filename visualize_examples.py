@@ -18,7 +18,8 @@ if __name__ ==  '__main__':
         annFile=path2json,
         imToAnnFile=path2idjson,
         transform=test_transform,
-        target_transform=None
+        target_transform=None,
+        distort_background=None
     )
 
     num_ids = len(coco_dset.ids)

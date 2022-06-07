@@ -48,6 +48,16 @@ def measure_shape_robustness(model: nn.Module,
     return preds, preds_dist, classes
 
 
+def calculate_statistics(preds, preds_dist, classes):
+    preds *= classes
+    preds_dist *= classes
+    class_preds = preds.max(axis=1)
+    class_preds_dist = preds_dist.max(axis=1)
+    print(f'Images mean class probability: {np.mean(class_preds)}')
+    print(f'Distorted images mean class probability: {np.mean(class_preds_dist)}')
+    print(f'Probability ratio: {np.mean(class_preds_dist) / np.mean(class_preds)}')
+
+
 if __name__ == '__main__':
     model_name = 'vgg16'
     path2data = '/media/lassi/Data/datasets/coco/images/val2017/'
@@ -68,7 +78,8 @@ if __name__ == '__main__':
         annFile=path2json,
         imToAnnFile=path2idjson,
         transform=val_transform,
-        target_transform=None
+        target_transform=None,
+        distort_background=None
     )
     coco_loader = DataLoader(
         coco_dset,
@@ -83,6 +94,4 @@ if __name__ == '__main__':
     model = load_model(model_name, device)
 
     preds, preds_dist, classes = measure_shape_robustness(model, coco_loader)
-    np.save(f'data/{model_name}_preds.npy', preds)
-    np.save(f'data/{model_name}_preds_dist.npy', preds_dist)
-    np.save(f'data/{model_name}_classes.npy', classes)
+    calculate_statistics(preds, preds_dist, classes)

@@ -111,6 +111,34 @@ class CocoDistortion(VisionDataset):
     def _load_target(self, id: int) -> List[Any]:
         return self.coco.loadAnns(self.im_to_ann[id])[0]
     
+    def _smooth_transition(
+        self,
+        image: np.ndarray,
+        image_distorted: np.ndarray,
+        mask: np.ndarray,
+        steps: int,
+        kernel_size: int
+        ) -> np.ndarray:
+        step_multiplier = 1 / (steps + 1)
+        kernel = np.ones((kernel_size+2, kernel_size+2), np.uint8)
+        mask = cv2.dilate(mask, kernel, iterations=1)
+        result = image_distorted * mask[..., None]
+        
+        #  Dilate the mask every step
+        for i in range(steps):
+            multiplier = step_multiplier * (i + 1)
+            mask_dilated = cv2.dilate(mask, kernel, iterations=1)
+            mask_diff = mask_dilated - mask
+            #  Make linear combination of distorted and not distorted image
+            #  in the zone of the dilated part of image
+            add = mask_diff[..., None] * (image_distorted * (1 - multiplier) + multiplier * image)
+            result += add.astype(np.uint8)
+            mask = mask_dilated
+        
+        #  Fill rest of image with original image
+        result = np.where(mask[..., None] == 1, result, image)
+        return result
+    
     def _warp_image(
         self,
         image: np.ndarray,
@@ -121,12 +149,12 @@ class CocoDistortion(VisionDataset):
         segmentation = np.array(target_ann['segmentation'][0]).reshape(-1, 2)
         #  Following is for test purposes in example visualization
         # print(self.coco.loadCats(target_ann['category_id']))
-        # for i in range(segmentation.shape[0]):
-        #     x, y = list(segmentation[i,:])
-        #     cv2.circle(image, (int(x), int(y)), 3, [255, 0, 0])
+        for i in range(segmentation.shape[0]):
+            x, y = list(segmentation[i,:])
+            cv2.circle(image, (int(x), int(y)), 3, [255, 0, 0])
         area = target_ann['area']
         target = segmentation.copy()
-        noise_strength = max(min(np.sqrt(area) // 20, 6), 1)
+        noise_strength = max(min(np.sqrt(area) // 15, 8), 2)
         len_targets = target.shape[0]
         for idx in range(len_targets):
             if idx % skip_every != 0:
@@ -149,8 +177,8 @@ class CocoDistortion(VisionDataset):
 
         self.tps.estimateTransformation(target, segmentation, matches)
 
-        distorted_image = self.tps.warpImage(image)
-        return distorted_image
+        image_distorted = self.tps.warpImage(image)
+        return image_distorted
 
     def __getitem__(self, index: int) -> Tuple[Any, Any, Any]:
         id = self.ids[index]
@@ -167,6 +195,16 @@ class CocoDistortion(VisionDataset):
                 image = image * mask[..., None]
 
         image_distorted = self._warp_image(image, target_ann, 4)
+
+        if self.distort_background == 'smooth_transition':
+            image_distorted = self._smooth_transition(
+                image=image,
+                image_distorted=image_distorted,
+                mask=mask,
+                steps=6,
+                kernel_size=5
+            )
+        
         target = np.zeros(self.num_categories)
         idx = self.categories[target_ann['category_id']]
         target[idx] = 1

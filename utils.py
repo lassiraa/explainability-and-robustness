@@ -162,17 +162,19 @@ class CocoDistortion(VisionDataset):
         target = segmentation.copy()
         noise_strength = max(min(np.sqrt(area) // 15, 8), 2)
         len_targets = target.shape[0]
+
         #  Add noise to target by chosen method
+
         if self.distortion_method == 'perpendicular':
             for idx in range(len_targets):
                 if idx % skip_every != 0:
                     continue
                 target[idx,:] = calculate_perpendicular_translation(
-                    idx,
-                    target,
-                    noise_strength
+                    idx, target, noise_strength
                 )
+
         if self.distortion_method == 'random_noise':
+
             for idx in range(len_targets):
                 if idx % skip_every != 0:
                     continue
@@ -180,23 +182,28 @@ class CocoDistortion(VisionDataset):
                     -noise_strength,
                     noise_strength+1,
                     size=2)
+
         if self.distortion_method == 'random_walk':
             prev_target = None
             for idx in range(len_targets):
                 if prev_target is None:
-                    target[idx,:] += rng.integers(
-                    -noise_strength,
-                    noise_strength+1,
-                    size=2)
+                    target[idx,:] = calculate_perpendicular_translation(
+                        idx, target, noise_strength+2
+                    )
                     prev_target = segmentation[idx,:]
                     continue
                 direction = segmentation[idx,:] - prev_target
-                noise = rng.integers(
-                    -noise_strength // 2,
-                    (noise_strength // 2) + 1,
-                    size=2)
+                noise = rng.integers(-1, 2, size=2)
                 target[idx,:] = target[idx-1,:] + direction + noise
                 prev_target = segmentation[idx,:]
+        
+        if self.distortion_method == 'singular_spike':
+            random_idx = rng.integers(0, target.shape[0])
+            target[random_idx,:] = calculate_perpendicular_translation(
+                random_idx, target, noise_strength*2
+            )
+        
+    
         segmentation = segmentation.reshape(-1, len(segmentation), 2)
         target = target.reshape(-1, len(target), 2)
         

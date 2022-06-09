@@ -8,6 +8,7 @@ import cv2
 from pycocotools.coco import COCO
 from torchvision.datasets import VisionDataset
 from PIL import Image
+from skimage.segmentation import find_boundaries
 
 
 rng = np.random.default_rng(51)
@@ -179,6 +180,23 @@ class CocoDistortion(VisionDataset):
                     -noise_strength,
                     noise_strength+1,
                     size=2)
+        if self.distortion_method == 'random_walk':
+            prev_target = None
+            for idx in range(len_targets):
+                if prev_target is None:
+                    target[idx,:] += rng.integers(
+                    -noise_strength,
+                    noise_strength+1,
+                    size=2)
+                    prev_target = segmentation[idx,:]
+                    continue
+                direction = segmentation[idx,:] - prev_target
+                noise = rng.integers(
+                    -noise_strength // 2,
+                    (noise_strength // 2) + 1,
+                    size=2)
+                target[idx,:] = target[idx-1,:] + direction + noise
+                prev_target = segmentation[idx,:]
         segmentation = segmentation.reshape(-1, len(segmentation), 2)
         target = target.reshape(-1, len(target), 2)
         

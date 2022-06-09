@@ -14,19 +14,28 @@ from utils import CocoClassification
 
 
 def get_model_to_fine_tune(model_name: str, device: torch.device):
-    if model_name == 'vgg16':
-        model = models.vgg16(pretrained=True)
+    if 'vgg' in model_name:
+        model = getattr(models, model_name)(pretrained=True)
         #  Using feature extraction so only output layer is fine-tuned
         for param in model.parameters():
             param.requires_grad = False
         model.classifier[6] = nn.Linear(4096, 80)
 
-    if model_name == 'vit_b_32':
-        model = models.vit_b_32(pretrained=True)
+    if 'vit_' in model_name:
+        model = getattr(models, model_name)(pretrained=True)
         #  Using feature extraction so only output layer is fine-tuned
         for param in model.parameters():
             param.requires_grad = False
-        model.heads[0] = nn.Linear(768, 80)
+        #  Required as vit_l models have different in_features than vit_b models
+        in_features = model.heads[0].in_features
+        model.heads[0] = nn.Linear(in_features, 80)
+
+    if 'resnet' in model_name:
+        model = getattr(models, model_name)(pretrained=True)
+        #  Using feature extraction so only output layer is fine-tuned
+        for param in model.parameters():
+            param.requires_grad = False
+        model.fc = nn.Linear(2048, 80)
 
     model = model.to(device)
     #  Getting all parameters that need to be optimized
@@ -124,7 +133,11 @@ if __name__ == '__main__':
                         help='workers for dataloader')
     parser.add_argument('--model_name', type=str, default='vit_b_32',
                         help='name of model used for training',
-                        choices=['vit_b_32', 'vgg16'])
+                        choices=[
+                            'vit_b_32', 'vit_b_16', 'vit_l_32', 'vit_l_16',
+                            'vgg16', 'vgg19', 'vgg16_bn', 'vgg19_bn',
+                            'resnet50', 'resnet101', 'resnet152'
+                        ])
     parser.add_argument('--checkpoint_dir', type=str,
                         default='/media/lassi/Data/checkpoints/model.pt',
                         help='path to save checkpoint')

@@ -83,15 +83,19 @@ class CocoDistortion(VisionDataset):
         root: str,
         annFile: str,
         imToAnnFile: str,
+        distortion_method: str = 'perpendicular',
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
         transforms: Optional[Callable] = None,
-        distort_background: Optional[str] = None
+        distort_background: Optional[str] = None,
+        debug_mode: bool = False
     ) -> None:
         super().__init__(root, transforms, transform, target_transform)
 
         self.coco = COCO(annFile)
         self.distort_background = distort_background
+        self.distortion_method = distortion_method
+        self.debug_mode = debug_mode
         with open(imToAnnFile, 'r') as rf:
             self.im_to_ann = json.load(rf)
             self.im_to_ann = {
@@ -118,7 +122,7 @@ class CocoDistortion(VisionDataset):
         mask: np.ndarray,
         steps: int,
         kernel_size: int
-        ) -> np.ndarray:
+    ) -> np.ndarray:
         step_multiplier = 1 / (steps + 1)
         kernel = np.ones((kernel_size+2, kernel_size+2), np.uint8)
         mask = cv2.dilate(mask, kernel, iterations=1)
@@ -148,25 +152,33 @@ class CocoDistortion(VisionDataset):
         
         segmentation = np.array(target_ann['segmentation'][0]).reshape(-1, 2)
         #  Following is for test purposes in example visualization
-        # print(self.coco.loadCats(target_ann['category_id']))
-        for i in range(segmentation.shape[0]):
-            x, y = list(segmentation[i,:])
-            cv2.circle(image, (int(x), int(y)), 3, [255, 0, 0])
+        if self.debug_mode:
+            print(self.coco.loadCats(target_ann['category_id']))
+            for i in range(segmentation.shape[0]):
+                x, y = list(segmentation[i,:])
+                cv2.circle(image, (int(x), int(y)), 3, [255, 0, 0])
         area = target_ann['area']
         target = segmentation.copy()
         noise_strength = max(min(np.sqrt(area) // 15, 8), 2)
         len_targets = target.shape[0]
-        for idx in range(len_targets):
-            if idx % skip_every != 0:
-                continue
-            target[idx,:] = calculate_perpendicular_translation(
-                idx,
-                target,
-                noise_strength
-            )
-        # target = target - rng.integers(-noise_strength,
-        #                                noise_strength+1,
-        #                                size=target.shape)
+        #  Add noise to target by chosen method
+        if self.distortion_method == 'perpendicular':
+            for idx in range(len_targets):
+                if idx % skip_every != 0:
+                    continue
+                target[idx,:] = calculate_perpendicular_translation(
+                    idx,
+                    target,
+                    noise_strength
+                )
+        if self.distortion_method == 'random_noise':
+            for idx in range(len_targets):
+                if idx % skip_every != 0:
+                    continue
+                target[idx,:] += rng.integers(
+                    -noise_strength,
+                    noise_strength+1,
+                    size=2)
         segmentation = segmentation.reshape(-1, len(segmentation), 2)
         target = target.reshape(-1, len(target), 2)
         

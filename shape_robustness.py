@@ -8,7 +8,10 @@ import numpy as np
 from utils import CocoDistortion
 
 
-def load_model(model_name: str, device: torch.device):
+def load_model(
+    model_name: str,
+    device: torch.device
+) -> nn.Module:
     assert model_name in ['vit_b_32', 'vgg16']
 
     if model_name == 'vgg16':
@@ -25,8 +28,11 @@ def load_model(model_name: str, device: torch.device):
     return model
 
 
-def measure_shape_robustness(model: nn.Module,
-                             coco_loader: DataLoader):
+def measure_shape_robustness(
+    model: nn.Module,
+    coco_loader: DataLoader,
+    device: torch.device
+) -> tuple[np.ndarray]:
     preds = np.zeros((len(coco_loader.dataset), 80))
     preds_dist = np.zeros((len(coco_loader.dataset), 80))
     classes = np.zeros((len(coco_loader.dataset), 80))
@@ -48,7 +54,11 @@ def measure_shape_robustness(model: nn.Module,
     return preds, preds_dist, classes
 
 
-def calculate_statistics(preds, preds_dist, classes):
+def calculate_statistics(
+    preds: np.ndarray,
+    preds_dist: np.ndarray,
+    classes: np.ndarray
+) -> None:
     preds *= classes
     preds_dist *= classes
     class_preds = preds.max(axis=1)
@@ -58,13 +68,16 @@ def calculate_statistics(preds, preds_dist, classes):
     print(f'Probability ratio: {np.mean(class_preds_dist) / np.mean(class_preds)}')
 
 
-if __name__ == '__main__':
-    model_name = 'vgg16'
-    path2data = '/media/lassi/Data/datasets/coco/images/val2017/'
-    path2json = '/media/lassi/Data/datasets/coco/annotations/instances_val2017.json'
-    path2idjson = 'data/image_to_annotation.json'
-    path2model = f'{model_name}_coco.pt'
-
+def test_model_robustness(
+    model_name: str,
+    model: nn.Module,
+    device: torch.device,
+    distortion_method: str,
+    distort_background: str,
+    path2data: str,
+    path2json: str,
+    path2idjson: str
+) -> None:
     val_transform = transforms.Compose([
         transforms.Resize(256),
         transforms.CenterCrop(224),
@@ -79,7 +92,8 @@ if __name__ == '__main__':
         imToAnnFile=path2idjson,
         transform=val_transform,
         target_transform=None,
-        distort_background=None
+        distort_background=distort_background,
+        distortion_method=distortion_method
     )
     coco_loader = DataLoader(
         coco_dset,
@@ -89,9 +103,36 @@ if __name__ == '__main__':
         num_workers=16
     )
 
+    preds, preds_dist, classes = measure_shape_robustness(model, coco_loader, device)
+    #  TODO: save statistics in some manner for later analysis
+    print(f'{model_name}, {distort_background}, {distortion_method}')
+    calculate_statistics(preds, preds_dist, classes)
+
+
+if __name__ == '__main__':
+    model_name = 'vgg16'
+    path2data = '/media/lassi/Data/datasets/coco/images/val2017/'
+    path2json = '/media/lassi/Data/datasets/coco/annotations/instances_val2017.json'
+    path2idjson = 'data/image_to_annotation.json'
+
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     model = load_model(model_name, device)
 
-    preds, preds_dist, classes = measure_shape_robustness(model, coco_loader)
-    calculate_statistics(preds, preds_dist, classes)
+    distortion_methods = ['perpendicular', 'random_noise', 'random_walk', 'singular_spike']
+    background_distortion_methods = ['blur', 'remove', 'smooth_transition']
+
+    for distortion_method in distortion_methods:
+        
+        for distort_background in background_distortion_methods:
+            
+            test_model_robustness(
+                model_name=model_name,
+                model=model,
+                device=device,
+                distortion_method=distortion_method,
+                distort_background=distort_background,
+                path2data=path2data,
+                path2json=path2json,
+                path2idjson=path2idjson
+            )

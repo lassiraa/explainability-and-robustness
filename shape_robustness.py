@@ -1,3 +1,5 @@
+import json
+
 import torchvision.models as models
 import torch
 import torchvision.transforms as transforms
@@ -58,18 +60,18 @@ def calculate_statistics(
     preds: np.ndarray,
     preds_dist: np.ndarray,
     classes: np.ndarray
-) -> None:
+) -> tuple[float]:
     preds *= classes
     preds_dist *= classes
     class_preds = preds.max(axis=1)
     class_preds_dist = preds_dist.max(axis=1)
-    print(f'Images mean class probability: {np.mean(class_preds)}')
-    print(f'Distorted images mean class probability: {np.mean(class_preds_dist)}')
-    print(f'Probability ratio: {np.mean(class_preds_dist) / np.mean(class_preds)}')
+    mean = np.mean(class_preds)
+    mean_distort = np.mean(class_preds_dist)
+    distort_ratio = np.mean(class_preds_dist) / np.mean(class_preds)
+    return mean, mean_distort, distort_ratio
 
 
-def test_model_robustness(
-    model_name: str,
+def get_model_robustness(
     model: nn.Module,
     device: torch.device,
     distortion_method: str,
@@ -102,15 +104,14 @@ def test_model_robustness(
         drop_last=False,
         num_workers=16
     )
-
+    
     preds, preds_dist, classes = measure_shape_robustness(model, coco_loader, device)
-    #  TODO: save statistics in some manner for later analysis
-    print(f'{model_name}, {distort_background}, {distortion_method}')
-    calculate_statistics(preds, preds_dist, classes)
+
+    return calculate_statistics(preds, preds_dist, classes)
 
 
 if __name__ == '__main__':
-    model_name = 'vgg16'
+    model_name = 'vit_b_32'
     path2data = '/media/lassi/Data/datasets/coco/images/val2017/'
     path2json = '/media/lassi/Data/datasets/coco/annotations/instances_val2017.json'
     path2idjson = 'data/image_to_annotation.json'
@@ -121,12 +122,13 @@ if __name__ == '__main__':
 
     distortion_methods = ['perpendicular', 'random_noise', 'random_walk', 'singular_spike']
     background_distortion_methods = ['blur', 'remove', 'smooth_transition']
+    results = []
 
     for distortion_method in distortion_methods:
         
         for distort_background in background_distortion_methods:
             
-            test_model_robustness(
+            mean, mean_distort, distort_ratio = get_model_robustness(
                 model_name=model_name,
                 model=model,
                 device=device,
@@ -136,3 +138,16 @@ if __name__ == '__main__':
                 path2json=path2json,
                 path2idjson=path2idjson
             )
+
+            results.append(dict(
+                model_name=model_name,
+                distortion_method=distortion_method,
+                distort_background=distort_background,
+                mean=mean,
+                mean_distort=mean_distort,
+                distort_ratio=distort_ratio
+            ))
+
+    #  Save image to annotation dictionary as json
+    with open(f'data/{model_name}_results.json', 'w') as fp:
+        json.dump(results, fp)

@@ -14,15 +14,19 @@ def load_model(
     model_name: str,
     device: torch.device
 ) -> nn.Module:
-    assert model_name in ['vit_b_32', 'vgg16']
-
-    if model_name == 'vgg16':
-        model = models.vgg16(pretrained=False)
+    if 'vgg' in model_name:
+        model = getattr(models, model_name)(pretrained=False)
         model.classifier[6] = nn.Linear(4096, 80)
 
-    if model_name == 'vit_b_32':
-        model = models.vit_b_32(pretrained=False)
-        model.heads[0] = nn.Linear(768, 80)
+    if 'vit_' in model_name:
+        model = getattr(models, model_name)(pretrained=False)
+        #  Required as vit_l models have different in_features than vit_b models
+        in_features = model.heads[0].in_features
+        model.heads[0] = nn.Linear(in_features, 80)
+
+    if 'resnet' in model_name:
+        model = getattr(models, model_name)(pretrained=False)
+        model.fc = nn.Linear(2048, 80)
     
     model.load_state_dict(torch.load(f'{model_name}_coco.pt'))
     model.eval()
@@ -78,7 +82,9 @@ def get_model_robustness(
     distort_background: str,
     path2data: str,
     path2json: str,
-    path2idjson: str
+    path2idjson: str,
+    batch_size: int,
+    num_workers: int
 ) -> None:
     val_transform = transforms.Compose([
         transforms.Resize(256),
@@ -99,10 +105,10 @@ def get_model_robustness(
     )
     coco_loader = DataLoader(
         coco_dset,
-        batch_size=100,
+        batch_size=batch_size,
         shuffle=False,
         drop_last=False,
-        num_workers=16
+        num_workers=num_workers
     )
     
     preds, preds_dist, classes = measure_shape_robustness(model, coco_loader, device)
@@ -111,14 +117,33 @@ def get_model_robustness(
 
 
 if __name__ == '__main__':
-    model_name = 'vit_b_32'
-    path2data = '/media/lassi/Data/datasets/coco/images/val2017/'
-    path2json = '/media/lassi/Data/datasets/coco/annotations/instances_val2017.json'
-    path2idjson = 'data/image_to_annotation.json'
+    import argparse
+    parser = argparse.ArgumentParser(description='Measure shape robustness')
+    parser.add_argument('--images_dir', type=str,
+                        default='/media/lassi/Data/datasets/coco/images/val2017/',
+                        help='path to coco root directory containing image folders')
+    parser.add_argument('--ann_path', type=str,
+                        default='/media/lassi/Data/datasets/coco/annotations/instances_val2017.json',
+                        help='path to root directory containing annotations')
+    parser.add_argument('--id_path', type=str,
+                        default='data/image_to_annotation.json',
+                        help='path to root directory containing annotations')
+    parser.add_argument('--batch_size', type=int, default=100,
+                        help='batch size for training')
+    parser.add_argument('--num_workers', type=int, default=16,
+                        help='workers for dataloader')
+    parser.add_argument('--model_name', type=str, default='vit_b_32',
+                        help='name of model used for inference',
+                        choices=[
+                            'vit_b_32', 'vit_b_16', 'vit_l_32', 'vit_l_16',
+                            'vgg16', 'vgg19', 'vgg16_bn', 'vgg19_bn',
+                            'resnet50', 'resnet101', 'resnet152'
+                        ])
+    args = parser.parse_args()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    model = load_model(model_name, device)
+    model = load_model(args.model_name, device)
 
     distortion_methods = ['perpendicular', 'random_noise', 'random_walk', 'singular_spike']
     background_distortion_methods = ['blur', 'remove', 'smooth_transition']
@@ -129,18 +154,19 @@ if __name__ == '__main__':
         for distort_background in background_distortion_methods:
             
             mean, mean_distort, distort_ratio = get_model_robustness(
-                model_name=model_name,
                 model=model,
                 device=device,
                 distortion_method=distortion_method,
                 distort_background=distort_background,
-                path2data=path2data,
-                path2json=path2json,
-                path2idjson=path2idjson
+                path2data=args.images_dir,
+                path2json=args.ann_path,
+                path2idjson=args.id_path,
+                batch_size=args.batch_size,
+                num_workers=args.num_workers
             )
 
             results.append(dict(
-                model_name=model_name,
+                model_name=args.model_name,
                 distortion_method=distortion_method,
                 distort_background=distort_background,
                 mean=mean,
@@ -149,5 +175,5 @@ if __name__ == '__main__':
             ))
 
     #  Save image to annotation dictionary as json
-    with open(f'data/{model_name}_results.json', 'w') as fp:
+    with open(f'data/{args.model_name}_results.json', 'w') as fp:
         json.dump(results, fp)

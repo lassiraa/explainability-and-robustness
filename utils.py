@@ -4,6 +4,7 @@ import os
 import json
 
 import numpy as np
+import torch
 import cv2
 from pycocotools.coco import COCO
 from torchvision.datasets import VisionDataset
@@ -18,7 +19,7 @@ def calculate_perpendicular_translation(
     idx: int,
     segmentation: np.ndarray,
     magnitude: float
-    ) -> np.ndarray:
+) -> np.ndarray:
     point = segmentation[idx,:]
     prev = segmentation[idx-1,:]
     next_idx = idx + 1 \
@@ -30,6 +31,15 @@ def calculate_perpendicular_translation(
     if norm == 0:
         return point
     return point + np.rint((v / norm) * magnitude)
+
+
+def calculate_mass_within(
+    saliency_map: torch.tensor,
+    class_mask: torch.tensor
+) -> float:
+    mass = saliency_map.sum()
+    mass_within = (saliency_map * class_mask).sum()
+    return mass_within / mass
 
 
 class CocoClassification(VisionDataset):
@@ -155,9 +165,9 @@ class CocoDistortion(VisionDataset):
         #  Following is for test purposes in example visualization
         if self.debug_mode:
             print(self.coco.loadCats(target_ann['category_id']))
-            for i in range(segmentation.shape[0]):
-                x, y = list(segmentation[i,:])
-                cv2.circle(image, (int(x), int(y)), 3, [255, 0, 0])
+            # for i in range(segmentation.shape[0]):
+            #     x, y = list(segmentation[i,:])
+            #     cv2.circle(image, (int(x), int(y)), 3, [255, 0, 0])
         area = target_ann['area']
         target = segmentation.copy()
         noise_strength = max(min(np.sqrt(area) // 15, 8), 2)
@@ -251,6 +261,74 @@ class CocoDistortion(VisionDataset):
             image_distorted = self.transform(Image.fromarray(image_distorted))
 
         return image, image_distorted, target
+
+    def __len__(self) -> int:
+        return len(self.ids)
+
+
+class CocoExplainabilityMeasurement(VisionDataset):
+    def __init__(
+        self,
+        root: str,
+        annFile: str,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+        transforms: Optional[Callable] = None
+    ) -> None:
+        super().__init__(root, transforms, transform, target_transform)
+
+        self.coco = COCO(annFile)
+        self.ids = list(sorted(self.coco.imgs.keys()))
+        categories = self.coco.getCatIds()
+        self.num_categories = len(categories)
+        self.categories = {cat: idx for idx, cat in enumerate(categories)}
+
+    def _load_image(self, id: int) -> Image.Image:
+        path = self.coco.loadImgs(id)[0]["file_name"]
+        return Image.open(os.path.join(self.root, path)).convert("RGB")
+
+    def _load_target(self, id: int) -> List[Any]:
+        anns = self.coco.loadAnns(self.coco.getAnnIds(id))
+        class_to_targets = dict()
+
+        for ann in anns:
+            if 'category_id' not in ann:
+                continue
+            
+            mask = self.coco.annToMask(ann).astype(bool)
+            idx = self.categories[ann['category_id']]
+            
+            if idx in class_to_targets:
+                class_to_targets[idx]['mask'] += mask
+                continue
+            
+            labels = np.zeros(self.num_categories, dtype=np.float32)
+            labels[idx] = 1
+            class_to_targets[idx] = dict(
+                mask=mask,
+                labels=labels
+            )
+        
+        return class_to_targets
+
+    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+        id = self.ids[index]
+        image = self._load_image(id)
+        class_to_targets = self._load_target(id)
+
+        #  Transform both the masks and the images.
+        #  If one is transformed, the other one needs to be as well.
+        if self.transform is not None and self.target_transform is not None:
+            image = self.transform(image)
+            class_to_targets = {
+                idx: {
+                    'mask': self.target_transform(target['mask']),
+                    'labels': target['labels']
+                }
+                for idx, target in class_to_targets.items()
+            }
+
+        return image, class_to_targets
 
     def __len__(self) -> int:
         return len(self.ids)

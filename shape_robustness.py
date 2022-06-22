@@ -152,6 +152,7 @@ if __name__ == '__main__':
     for distortion_method in distortion_methods:
         
         for distort_background in background_distortion_methods:
+            print('Processing', distortion_method, distort_background)
             
             mean, mean_distort, distort_ratio = get_model_robustness(
                 model=model,

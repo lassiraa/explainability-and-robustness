@@ -36,7 +36,6 @@ def load_model(
         target_layers = [model.layer4[-1]]
     
     model.load_state_dict(torch.load(f'{model_name}_coco.pt'))
-    model.eval()
     model.to(device)
     return model, target_layers
 
@@ -47,42 +46,40 @@ def measure_weighting_game(
     device: torch.device,
     target_layers: Any
 ) -> tuple[np.ndarray]:
-    preds = np.zeros((len(coco_loader.dataset), 80))
-    preds_dist = np.zeros((len(coco_loader.dataset), 80))
-    classes = np.zeros((len(coco_loader.dataset), 80))
-    batch = coco_loader.batch_size
-
 
     cam = GradCAM(model, target_layers, use_cuda=True)
 
-    with torch.no_grad():
+    results = []
 
-        for i, (inputs, class_to_targets) in enumerate(coco_loader):
-            inputs = inputs.to(device)
-            for idx, target in class_to_targets.items():
-                mask = target['mask'].to(device)
-                saliency_map = cam(inputs, [ClassifierOutputTarget(idx)])
-                print(calculate_mass_within(saliency_map, mask))
+    for i, (inputs, class_to_targets) in enumerate(coco_loader):
+        
+        inputs = inputs.to(device)
+
+        for idx, target in class_to_targets.items():
+            mask = target['mask'].to(device)
+            object_area = mask.sum().item()
+
+            #  Skip if object(s) are less than 100 pixels by size
+            if object_area <= 100:
+                continue
+
+            #  Process saliency map
+            saliency_map = cam(inputs, [ClassifierOutputTarget(idx)])
+            saliency_map = torch.from_numpy(saliency_map).to(device)
+
+            #  Calculate saliency map's mass within the object mask
+            accuracy = calculate_mass_within(saliency_map, mask)
+            results.append(dict(
+                object_area=object_area,
+                accuracy=accuracy,
+                class_id=idx
+            ))
+
     
-    return preds, preds_dist, classes
+    return results
 
 
-def calculate_statistics(
-    preds: np.ndarray,
-    preds_dist: np.ndarray,
-    classes: np.ndarray
-) -> tuple[float]:
-    preds *= classes
-    preds_dist *= classes
-    class_preds = preds.max(axis=1)
-    class_preds_dist = preds_dist.max(axis=1)
-    mean = np.mean(class_preds)
-    mean_distort = np.mean(class_preds_dist)
-    distort_ratio = np.mean(class_preds_dist) / np.mean(class_preds)
-    return mean, mean_distort, distort_ratio
-
-
-def get_explanation_robustness(
+def get_explanation_quality(
     model: nn.Module,
     device: torch.device,
     target_layers: Any,
@@ -118,9 +115,7 @@ def get_explanation_robustness(
         num_workers=num_workers
     )
     
-    preds, preds_dist, classes = measure_weighting_game(model, coco_loader, device, target_layers)
-
-    return calculate_statistics(preds, preds_dist, classes)
+    return measure_weighting_game(model, coco_loader, device, target_layers)
 
 
 if __name__ == '__main__':
@@ -132,14 +127,11 @@ if __name__ == '__main__':
     parser.add_argument('--ann_path', type=str,
                         default='/media/lassi/Data/datasets/coco/annotations/instances_val2017.json',
                         help='path to root directory containing annotations')
-    parser.add_argument('--id_path', type=str,
-                        default='data/image_to_annotation.json',
-                        help='path to root directory containing annotations')
     parser.add_argument('--batch_size', type=int, default=100,
                         help='batch size for training')
     parser.add_argument('--num_workers', type=int, default=16,
                         help='workers for dataloader')
-    parser.add_argument('--model_name', type=str, default='vit_b_32',
+    parser.add_argument('--model_name', type=str, default='resnet50',
                         help='name of model used for inference',
                         choices=[
                             'vit_b_32', 'vit_b_16', 'vit_l_32', 'vit_l_16',
@@ -153,7 +145,7 @@ if __name__ == '__main__':
     model, target_layers = load_model(args.model_name, device)
 
             
-    mean, mean_distort, distort_ratio = get_explanation_robustness(
+    mean, mean_distort, distort_ratio = get_explanation_quality(
         model=model,
         device=device,
         target_layers=target_layers,

@@ -39,7 +39,7 @@ def calculate_mass_within(
 ) -> float:
     mass = saliency_map.sum()
     mass_within = (saliency_map * class_mask).sum()
-    return mass_within / mass
+    return (mass_within / mass).item()
 
 
 class CocoClassification(VisionDataset):

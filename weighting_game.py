@@ -1,6 +1,8 @@
 import json
-from typing import Any
+from typing import Any, Callable
+from functools import partial
 
+import cv2
 import torchvision.models as models
 import torch
 import torchvision.transforms as transforms
@@ -41,22 +43,17 @@ def load_model(
 
 
 def measure_weighting_game(
-    model: nn.Module,
     coco_loader: DataLoader,
     device: torch.device,
-    target_layers: Any
+    saliency_method: Callable
 ) -> tuple[np.ndarray]:
-
-    cam = GradCAM(model, target_layers, use_cuda=True)
-
     results = []
 
     for i, (inputs, class_to_targets) in enumerate(coco_loader):
-        
         inputs = inputs.to(device)
 
         for idx, target in class_to_targets.items():
-            mask = target['mask'].to(device)
+            mask = target['mask'].to(device=device, dtype=torch.bool)
             object_area = mask.sum().item()
 
             #  Skip if object(s) are less than 100 pixels by size
@@ -64,7 +61,7 @@ def measure_weighting_game(
                 continue
 
             #  Process saliency map
-            saliency_map = cam(inputs, [ClassifierOutputTarget(idx)])
+            saliency_map = saliency_method(inputs, [ClassifierOutputTarget(idx)])
             saliency_map = torch.from_numpy(saliency_map).to(device)
 
             #  Calculate saliency map's mass within the object mask
@@ -79,23 +76,27 @@ def measure_weighting_game(
     return results
 
 
-def get_explanation_quality(
-    model: nn.Module,
-    device: torch.device,
-    target_layers: Any,
+def get_dataloader(
+    is_vit: bool,
     path2data: str,
     path2json: str,
     batch_size: int,
     num_workers: int
 ) -> None:
+    mean = [0.485, 0.456, 0.406]
+    std = [0.229, 0.224, 0.225]
+    if is_vit:
+        mean = [0.5, 0.5, 0.5]
+        std = [0.5, 0.5, 0.5]
     image_transform = transforms.Compose([
         transforms.Resize(256),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                            std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=mean, std=std)
     ])
+    mask_dilation = partial(cv2.dilate, kernel=np.ones((7,7)), iterations=1)
     mask_transform = transforms.Compose([
+        mask_dilation,
         transforms.ToTensor(),
         transforms.Resize(256),
         transforms.CenterCrop(224)
@@ -115,12 +116,12 @@ def get_explanation_quality(
         num_workers=num_workers
     )
     
-    return measure_weighting_game(model, coco_loader, device, target_layers)
+    return coco_loader
 
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description='Measure shape robustness')
+    parser = argparse.ArgumentParser(description='Measure accuracy of explanation method')
     parser.add_argument('--images_dir', type=str,
                         default='/media/lassi/Data/datasets/coco/images/val2017/',
                         help='path to coco root directory containing image folders')
@@ -138,19 +139,37 @@ if __name__ == '__main__':
                             'vgg16', 'vgg19', 'vgg16_bn', 'vgg19_bn',
                             'resnet50', 'resnet101', 'resnet152'
                         ])
+    parser.add_argument('--method', type=str, default='gradcam',
+                        choices=['gradcam', 'gradcam++',
+                                 'scorecam', 'xgradcam',
+                                 'ablationcam', 'eigencam',
+                                 'eigengradcam', 'layercam', 'fullgrad'],
+                        help='Can be gradcam/gradcam++/scorecam/xgradcam'
+                             '/ablationcam/eigencam/eigengradcam/layercam')
     args = parser.parse_args()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     model, target_layers = load_model(args.model_name, device)
 
+    is_vit = 'vit_' == args.model_name[:4]
+
+    saliency_method = GradCAM(model, target_layers, use_cuda=True)
             
-    mean, mean_distort, distort_ratio = get_explanation_quality(
-        model=model,
-        device=device,
-        target_layers=target_layers,
+    coco_loader = get_dataloader(
+        is_vit=is_vit,
         path2data=args.images_dir,
         path2json=args.ann_path,
         batch_size=args.batch_size,
         num_workers=args.num_workers
     )
+
+    results = measure_weighting_game(
+        coco_loader=coco_loader,
+        device=device,
+        saliency_method=saliency_method
+    )
+
+    #  Save image to annotation dictionary as json
+    with open(f'data/{args.model_name}_{args.method}_weighting_game.json', 'w') as fp:
+        json.dump(results, fp)

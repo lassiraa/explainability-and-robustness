@@ -37,6 +37,7 @@ def calculate_mass_within(
     saliency_map: torch.tensor,
     class_mask: torch.tensor
 ) -> float:
+    class_mask = class_mask
     mass = saliency_map.sum()
     mass_within = (saliency_map * class_mask).sum()
     return (mass_within / mass).item()
@@ -322,7 +323,7 @@ class CocoExplainabilityMeasurement(VisionDataset):
             image = self.transform(image)
             class_to_targets = {
                 idx: {
-                    'mask': self.target_transform(target['mask']),
+                    'mask': self.target_transform(target['mask'].astype('float')),
                     'labels': target['labels']
                 }
                 for idx, target in class_to_targets.items()

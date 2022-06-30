@@ -43,6 +43,17 @@ def calculate_mass_within(
     return (mass_within / mass).item()
 
 
+def reshape_transform_vit(tensor):
+    dim = int(np.sqrt(tensor[:, 1:, :].shape[1]))
+    result = tensor[:, 1:, :].reshape(tensor.size(0),
+                                      dim, dim, tensor.size(2))
+
+    #  Bring the channels to the first dimension,
+    #  like in CNNs.
+    result = result.transpose(2, 3).transpose(1, 2)
+    return result
+
+
 class CocoClassification(VisionDataset):
     def __init__(
         self,

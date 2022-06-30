@@ -9,10 +9,19 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 import torch.nn as nn
 import numpy as np
-from pytorch_grad_cam import GradCAM
+from pytorch_grad_cam import GradCAM, \
+    ScoreCAM, \
+    GradCAMPlusPlus, \
+    AblationCAM, \
+    XGradCAM, \
+    EigenCAM, \
+    EigenGradCAM, \
+    LayerCAM, \
+    FullGrad
+from pytorch_grad_cam.ablation_layer import AblationLayerVit
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 
-from utils import CocoExplainabilityMeasurement, calculate_mass_within
+from utils import CocoExplainabilityMeasurement, calculate_mass_within, reshape_transform_vit
 
 
 #  TODO: move to utils
@@ -152,9 +161,33 @@ if __name__ == '__main__':
 
     model, target_layers = load_model(args.model_name, device)
 
+    reshape_transform = None
     is_vit = 'vit_' == args.model_name[:4]
 
-    saliency_method = GradCAM(model, target_layers, use_cuda=True)
+    if is_vit:
+        reshape_transform = reshape_transform_vit
+
+    methods = \
+        {"gradcam": GradCAM,
+         "scorecam": ScoreCAM,
+         "gradcam++": GradCAMPlusPlus,
+         "ablationcam": AblationCAM,
+         "xgradcam": XGradCAM,
+         "eigencam": EigenCAM,
+         "fullgrad": FullGrad}
+
+    method = methods[args.method]
+    if args.method == 'ablationcam' and is_vit:
+        saliency_method = method(model=model,
+                                 target_layers=target_layers,
+                                 reshape_transform=reshape_transform,
+                                 use_cuda=torch.cuda.is_available(),
+                                 ablation_layer=AblationLayerVit())
+    else:
+        saliency_method = method(model=model,
+                                 target_layers=target_layers,
+                                 reshape_transform=reshape_transform,
+                                 use_cuda=torch.cuda.is_available())
             
     coco_loader = get_dataloader(
         is_vit=is_vit,

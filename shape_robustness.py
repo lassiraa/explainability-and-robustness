@@ -77,6 +77,7 @@ def calculate_statistics(
 
 def get_model_robustness(
     model: nn.Module,
+    model_name: str,
     device: torch.device,
     distortion_method: str,
     distort_background: str,
@@ -86,12 +87,18 @@ def get_model_robustness(
     batch_size: int,
     num_workers: int
 ) -> None:
+    if 'vit_' in model_name:
+        mean = [.5, .5, .5]
+        std = [.5, .5, .5]
+    else:
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
     val_transform = transforms.Compose([
         transforms.Resize(256),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                            std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=mean,
+                             std=std)
     ])
 
     coco_dset = CocoDistortion(
@@ -156,6 +163,7 @@ if __name__ == '__main__':
             
             mean, mean_distort, distort_ratio = get_model_robustness(
                 model=model,
+                model_name=args.model_name,
                 device=device,
                 distortion_method=distortion_method,
                 distort_background=distort_background,

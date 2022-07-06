@@ -1,0 +1,3 @@
+[submodule "kenburns"]
+	path = kenburns
+	url = git@github.com:lassiraa/3d-ken-burns.git

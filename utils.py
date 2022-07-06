@@ -5,6 +5,8 @@ import json
 
 import numpy as np
 import torch
+import torchvision.models as models
+import torch.nn as nn
 import cv2
 from pycocotools.coco import COCO
 from torchvision.datasets import VisionDataset
@@ -13,6 +15,32 @@ from skimage.segmentation import find_boundaries
 
 
 rng = np.random.default_rng(51)
+
+
+def load_model_with_target_layers(
+    model_name: str,
+    device: torch.device
+) -> nn.Module:
+    if 'vgg' in model_name:
+        model = getattr(models, model_name)(pretrained=False)
+        model.classifier[6] = nn.Linear(4096, 80)
+        target_layers = [model.features[-1]]
+
+    if 'vit_' in model_name:
+        model = getattr(models, model_name)(pretrained=False)
+        #  Required as vit_l models have different in_features than vit_b models
+        in_features = model.heads[0].in_features
+        model.heads[0] = nn.Linear(in_features, 80)
+        target_layers = [model.encoder.layers[-1].ln_1]
+
+    if 'resnet' in model_name:
+        model = getattr(models, model_name)(pretrained=False)
+        model.fc = nn.Linear(2048, 80)
+        target_layers = [model.layer4[-1]]
+    
+    model.load_state_dict(torch.load(f'{model_name}_coco.pt'))
+    model.to(device)
+    return model, target_layers
 
 
 def calculate_perpendicular_translation(

@@ -53,7 +53,7 @@ def process_video(
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description='Measure stability of explanation method')
+    parser = argparse.ArgumentParser(description='Create CAM visualization of video for highest prob. class')
     parser.add_argument('--in_path', type=str, required=True,
                         help='path to input video')
     parser.add_argument('--out_path', type=str, required=True,

@@ -28,13 +28,13 @@ def process_video(
     image_transform: transforms.Compose,
     image_normalize: transforms.Normalize
 ) -> tuple[np.ndarray]:
-    # n_frames = video.reader.nframes
-    # frames = np.zeros((n_frames, 224, 224, 3))
     frames = []
 
-    for i, frame in enumerate(video.iter_frames()):
+    for frame in video.iter_frames():
+        #  Preprocess frame for network
         frame = image_transform(frame / 255)
         input = image_normalize(frame).to(device=device, dtype=torch.float32).unsqueeze(0)
+        #  Keep numpy version of frame for cam visualization
         frame_npy = np.float32(frame.numpy())
         frame_npy = np.moveaxis(frame_npy, 0, -1)
 
@@ -45,8 +45,7 @@ def process_video(
             mask=saliency_map,
             use_rgb=True
         )
-
-        # frames[i,:,:,:] = cam_frame
+        #  Add frame to cam visualization video
         frames.append(cam_frame)
     
     return frames
@@ -54,11 +53,11 @@ def process_video(
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description='Measure accuracy of explanation method')
+    parser = argparse.ArgumentParser(description='Measure stability of explanation method')
     parser.add_argument('--in_path', type=str, required=True,
-                        help='path to coco root directory containing image folders')
+                        help='path to input video')
     parser.add_argument('--out_path', type=str, required=True,
-                        help='path to root directory containing annotations')
+                        help='path to output video')
     parser.add_argument('--batch_size', type=int, default=32,
                         help='batch size for cam methods')
     parser.add_argument('--num_workers', type=int, default=16,
@@ -123,6 +122,8 @@ if __name__ == '__main__':
                                  reshape_transform=reshape_transform,
                                  use_cuda=torch.cuda.is_available())
     
+    #  Read video and find highest probability class from first frame.
+    #  Class ID is used for CAM visualization
     video = mpy.VideoFileClip(args.in_path)
     start_frame = image_transform(video.get_frame(0)).to(device).unsqueeze(0)
     start_output = model(start_frame)

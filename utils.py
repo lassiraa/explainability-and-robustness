@@ -168,46 +168,46 @@ class CocoDistortion(VisionDataset):
     
     def _smooth_transition(
         self,
-        image: np.ndarray,
-        image_distorted: np.ndarray,
+        vector_field: np.ndarray,
         mask: np.ndarray,
         steps: int,
         kernel_size: int
     ) -> np.ndarray:
         step_multiplier = 1 / (steps + 1)
-        kernel = np.ones((kernel_size+2, kernel_size+2), np.uint8)
+        kernel = np.ones((kernel_size+2, kernel_size+2), np.float32)
         mask = cv2.dilate(mask, kernel, iterations=1)
-        result = image_distorted * mask[..., None]
+        result = vector_field * mask
         
         #  Dilate the mask every step
         for i in range(steps):
             multiplier = step_multiplier * (i + 1)
             mask_dilated = cv2.dilate(mask, kernel, iterations=1)
             mask_diff = mask_dilated - mask
-            #  Make linear combination of distorted and not distorted image
-            #  in the zone of the dilated part of image
-            add = mask_diff[..., None] * (image_distorted * (1 - multiplier) + multiplier * image)
-            result += add.astype(np.uint8)
+            #  Make linear combination of distorted and not distorted vector fields
+            add = mask_diff * vector_field * (1 - multiplier)
+            result += add.astype(np.float32)
             mask = mask_dilated
-        
+    
         #  Fill rest of image with original image
-        result = np.where(mask[..., None] == 1, result, image)
+        result = np.where(mask == 1, result, 0)
         return result
     
     def _warp_image(
         self,
         image: np.ndarray,
         target_ann: dict,
+        mask: np.ndarray,
         skip_every: int
     ) -> np.ndarray:
-        
         segmentation = np.array(target_ann['segmentation'][0]).reshape(-1, 2)
+
         #  Following is for test purposes in example visualization
         if self.debug_mode:
             print(self.coco.loadCats(target_ann['category_id']))
-            # for i in range(segmentation.shape[0]):
-            #     x, y = list(segmentation[i,:])
-            #     cv2.circle(image, (int(x), int(y)), 3, [255, 0, 0])
+            for i in range(segmentation.shape[0]):
+                x, y = list(segmentation[i,:])
+                cv2.circle(image, (int(x), int(y)), 3, [255, 0, 0])
+        
         area = target_ann['area']
         target = segmentation.copy()
         noise_strength = max(min(np.sqrt(area) // 15, 8), 2)
@@ -264,7 +264,38 @@ class CocoDistortion(VisionDataset):
 
         self.tps.estimateTransformation(target, segmentation, matches)
 
-        image_distorted = self.tps.warpImage(image)
+        indices = np.float32(
+            np.meshgrid(np.arange(image.shape[1]), np.arange(image.shape[0]))
+        ).T.reshape(1,-1,2)
+
+        #  Apply transition to all (col, row) points
+        _, new_pts = self.tps.applyTransformation(np.float32(indices))
+
+        #  Create vector field of the point transitions
+        map_x = new_pts[0,:,0].reshape(image.shape[0], image.shape[1], order='F')
+        ind_x = indices[0,:,0].reshape(image.shape[0], image.shape[1], order='F')
+        vector_field_x = map_x - ind_x
+        #  Smooth transition of vector field around the object
+        vector_field_x_smoothed = self._smooth_transition(
+            vector_field=vector_field_x,
+            mask=mask,
+            steps=5,
+            kernel_size=9
+        )
+        map_x = vector_field_x_smoothed + ind_x
+        
+        #  Repeat smoothing process for y-coordinate
+        map_y = new_pts[0,:,1].reshape(image.shape[0], image.shape[1], order='F')
+        ind_y = indices[0,:,1].reshape(image.shape[0], image.shape[1], order='F')
+        vector_field_y = map_y - ind_y
+        vector_field_y_smoothed = self._smooth_transition(
+            vector_field=vector_field_y,
+            mask=mask,
+            steps=5,
+            kernel_size=9
+        )
+        map_y = vector_field_y_smoothed + ind_y
+        image_distorted = cv2.remap(image, map_x, map_y, cv2.INTER_LINEAR)
         return image_distorted
 
     def __getitem__(self, index: int) -> Tuple[Any, Any, Any]:
@@ -272,25 +303,15 @@ class CocoDistortion(VisionDataset):
         image = self._load_image(id)
         image = np.array(image)
         target_ann = self._load_target(id)
+        mask = self.coco.annToMask(target_ann)
 
-        if self.distort_background is not None:
-            mask = self.coco.annToMask(target_ann)
-            if self.distort_background == 'blur':
-                image_blurred = cv2.GaussianBlur(image, (21, 21), 0.5*((21-1)*0.5 - 1) + 0.8)
-                image = np.where(mask[..., None] == 1, image, image_blurred)
-            if self.distort_background == 'remove':
-                image = image * mask[..., None]
+        if self.distort_background == 'blur':
+            image_blurred = cv2.GaussianBlur(image, (21, 21), 0.5*((21-1)*0.5 - 1) + 0.8)
+            image = np.where(mask[..., None] == 1, image, image_blurred)
+        if self.distort_background == 'remove':
+            image = image * mask[..., None]
 
-        image_distorted = self._warp_image(image, target_ann, 4)
-
-        if self.distort_background == 'smooth_transition':
-            image_distorted = self._smooth_transition(
-                image=image,
-                image_distorted=image_distorted,
-                mask=mask,
-                steps=6,
-                kernel_size=5
-            )
+        image_distorted = self._warp_image(image, target_ann, mask, 4)
         
         target = np.zeros(self.num_categories)
         idx = self.categories[target_ann['category_id']]

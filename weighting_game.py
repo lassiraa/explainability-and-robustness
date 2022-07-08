@@ -21,34 +21,8 @@ from pytorch_grad_cam import GradCAM, \
 from pytorch_grad_cam.ablation_layer import AblationLayerVit
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 
-from utils import CocoExplainabilityMeasurement, calculate_mass_within, reshape_transform_vit
-
-
-#  TODO: move to utils
-def load_model(
-    model_name: str,
-    device: torch.device
-) -> nn.Module:
-    if 'vgg' in model_name:
-        model = getattr(models, model_name)(pretrained=False)
-        model.classifier[6] = nn.Linear(4096, 80)
-        target_layers = [model.features[-1]]
-
-    if 'vit_' in model_name:
-        model = getattr(models, model_name)(pretrained=False)
-        #  Required as vit_l models have different in_features than vit_b models
-        in_features = model.heads[0].in_features
-        model.heads[0] = nn.Linear(in_features, 80)
-        target_layers = [model.encoder.layers[-1].ln_1]
-
-    if 'resnet' in model_name:
-        model = getattr(models, model_name)(pretrained=False)
-        model.fc = nn.Linear(2048, 80)
-        target_layers = [model.layer4[-1]]
-    
-    model.load_state_dict(torch.load(f'{model_name}_coco.pt'))
-    model.to(device)
-    return model, target_layers
+from utils import CocoExplainabilityMeasurement, calculate_mass_within, reshape_transform_vit, \
+    load_model_with_target_layers
 
 
 def measure_weighting_game(
@@ -159,7 +133,7 @@ if __name__ == '__main__':
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    model, target_layers = load_model(args.model_name, device)
+    model, target_layers = load_model_with_target_layers(args.model_name, device)
 
     reshape_transform = None
     is_vit = 'vit_' == args.model_name[:4]

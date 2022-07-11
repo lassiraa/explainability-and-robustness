@@ -84,9 +84,14 @@ def calculate_statistics(
     preds_dist *= distorted_classes
     class_preds = preds.max(axis=1)
     class_preds_dist = preds_dist.max(axis=1)
-    correctly_predicted = len(class_preds[class_preds > threshold])
-    correctly_predicted_dist = len(class_preds_dist[class_preds_dist > threshold])
-    return correctly_predicted, correctly_predicted_dist
+    distort_ratio = len(class_preds[class_preds > threshold]) \
+         / len(class_preds_dist[class_preds_dist > threshold])
+    distort_ratio_strict = len(class_preds[class_preds > threshold + 0.05]) \
+         / len(class_preds_dist[class_preds_dist > threshold + 0.05])
+    distort_ratio_lenient = len(class_preds[class_preds > threshold - 0.05]) \
+         / len(class_preds_dist[class_preds_dist > threshold - 0.05])
+    accuracy = len(class_preds[class_preds > threshold])
+    return accuracy, distort_ratio, distort_ratio_strict, distort_ratio_lenient
 
 
 def get_model_robustness(
@@ -175,7 +180,8 @@ if __name__ == '__main__':
         for distort_background in background_distortion_methods:
             print('Processing', distortion_method, distort_background)
             
-            correctly_predicted, correctly_predicted_dist = get_model_robustness(
+            accuracy, distort_ratio, distort_ratio_strict, distort_ratio_lenient \
+                = get_model_robustness(
                 model=model,
                 model_name=args.model_name,
                 device=device,
@@ -192,9 +198,10 @@ if __name__ == '__main__':
                 model_name=args.model_name,
                 distortion_method=distortion_method,
                 distort_background=distort_background,
-                correctly_predicted=correctly_predicted,
-                correctly_predicted_dist=correctly_predicted_dist,
-                distort_ratio=correctly_predicted_dist/correctly_predicted
+                accuracy=accuracy
+                distort_ratio=distort_ratio,
+                distort_ratio_strict=distort_ratio_strict,
+                distort_ratio_lenient=distort_ratio_lenient
             ))
 
     #  Save image to annotation dictionary as json

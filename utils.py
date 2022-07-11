@@ -165,6 +165,17 @@ class CocoDistortion(VisionDataset):
 
     def _load_target(self, id: int) -> List[Any]:
         return self.coco.loadAnns(self.im_to_ann[id])[0]
+ 
+    def _load_targets(self, id: int) -> List[Any]:
+        anns = self.coco.loadAnns(self.coco.getAnnIds(id))
+        labels = np.zeros(self.num_categories, dtype=np.float32)
+
+        for ann in anns:
+            assert('category_id' in ann)
+            idx = self.categories[ann['category_id']]
+            labels[idx] = 1
+        
+        return labels
     
     def _smooth_transition(
         self,
@@ -291,6 +302,7 @@ class CocoDistortion(VisionDataset):
         image = self._load_image(id)
         image = np.array(image)
         target_ann = self._load_target(id)
+        all_labels = self._load_targets(id)
         mask = self.coco.annToMask(target_ann)
 
         if self.distort_background == 'blur':
@@ -301,15 +313,15 @@ class CocoDistortion(VisionDataset):
 
         image_distorted = self._warp_image(image, target_ann, mask, 4)
         
-        target = np.zeros(self.num_categories)
+        distorted_label = np.zeros(self.num_categories)
         idx = self.categories[target_ann['category_id']]
-        target[idx] = 1
+        distorted_label[idx] = 1
 
         if self.transform is not None:
             image = self.transform(Image.fromarray(image))
             image_distorted = self.transform(Image.fromarray(image_distorted))
 
-        return image, image_distorted, target
+        return image, image_distorted, distorted_label, all_labels
 
     def __len__(self) -> int:
         return len(self.ids)

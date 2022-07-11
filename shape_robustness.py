@@ -1,4 +1,5 @@
 import json
+from cv2 import correctMatches, threshold
 
 import torchvision.models as models
 import torch
@@ -6,6 +7,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 import torch.nn as nn
 import numpy as np
+from sklearn import metrics
 
 from utils import CocoDistortion
 
@@ -41,38 +43,50 @@ def measure_shape_robustness(
 ) -> tuple[np.ndarray]:
     preds = np.zeros((len(coco_loader.dataset), 80))
     preds_dist = np.zeros((len(coco_loader.dataset), 80))
-    classes = np.zeros((len(coco_loader.dataset), 80))
+    distorted_classes = np.zeros((len(coco_loader.dataset), 80))
+    all_classes = np.zeros((len(coco_loader.dataset), 80))
     batch = coco_loader.batch_size
     activation = nn.Sigmoid()
 
     with torch.no_grad():
 
-        for i, (inputs, distorted_inputs, labels) in enumerate(coco_loader):
+        for i, (inputs, distorted_inputs, distorted_label, all_labels) in enumerate(coco_loader):
             inputs = inputs.to(device)
             distorted_inputs = distorted_inputs.to(device)
-            labels = labels.to(device)
             outputs = activation(model(inputs))
             distorted_outputs = activation(model(distorted_inputs))
             preds[i*batch:(i+1)*batch] = outputs.cpu().detach().numpy()
             preds_dist[i*batch:(i+1)*batch] = distorted_outputs.cpu().detach().numpy()
-            classes[i*batch:(i+1)*batch] = labels.cpu().detach().numpy()
+            distorted_classes[i*batch:(i+1)*batch] = distorted_label.numpy()
+            all_classes[i*batch:(i+1)*batch] = all_labels.numpy()
     
-    return preds, preds_dist, classes
+    return preds, preds_dist, distorted_classes, all_classes
 
 
 def calculate_statistics(
     preds: np.ndarray,
     preds_dist: np.ndarray,
-    classes: np.ndarray
+    distorted_classes: np.ndarray,
+    all_classes: np.ndarray
 ) -> tuple[float]:
-    preds *= classes
-    preds_dist *= classes
+    #  Find optimal threshold by F1-score with margin of 0.05
+    threshold = 0.05
+    best_score = (0, 0)
+    while threshold < 1:
+        f1_score = metrics.f1_score(all_classes, np.where(preds > threshold, 1, 0))
+        threshold += 0.05
+        if f1_score > best_score[0]:
+            best_score = (f1_score, threshold)
+    threshold = best_score[1]
+
+    #  Check how binary predictions change with distortions
+    preds *= distorted_classes
+    preds_dist *= distorted_classes
     class_preds = preds.max(axis=1)
     class_preds_dist = preds_dist.max(axis=1)
-    mean = np.mean(class_preds)
-    mean_distort = np.mean(class_preds_dist)
-    distort_ratio = np.mean(class_preds_dist) / np.mean(class_preds)
-    return mean, mean_distort, distort_ratio
+    correctly_predicted = len(class_preds[class_preds > threshold])
+    correctly_predicted_dist = len(class_preds_dist[class_preds_dist > threshold])
+    return correctly_predicted, correctly_predicted_dist
 
 
 def get_model_robustness(
@@ -118,9 +132,9 @@ def get_model_robustness(
         num_workers=num_workers
     )
     
-    preds, preds_dist, classes = measure_shape_robustness(model, coco_loader, device)
+    preds, preds_dist, distorted_classes, all_classes = measure_shape_robustness(model, coco_loader, device)
 
-    return calculate_statistics(preds, preds_dist, classes)
+    return calculate_statistics(preds, preds_dist, distorted_classes, all_classes)
 
 
 if __name__ == '__main__':
@@ -153,7 +167,7 @@ if __name__ == '__main__':
     model = load_model(args.model_name, device)
 
     distortion_methods = ['perpendicular', 'random_noise']
-    background_distortion_methods = ['blur', 'remove', None]
+    background_distortion_methods = ['blur', None]
     results = []
 
     for distortion_method in distortion_methods:
@@ -161,7 +175,7 @@ if __name__ == '__main__':
         for distort_background in background_distortion_methods:
             print('Processing', distortion_method, distort_background)
             
-            mean, mean_distort, distort_ratio = get_model_robustness(
+            correctly_predicted, correctly_predicted_dist = get_model_robustness(
                 model=model,
                 model_name=args.model_name,
                 device=device,
@@ -178,9 +192,9 @@ if __name__ == '__main__':
                 model_name=args.model_name,
                 distortion_method=distortion_method,
                 distort_background=distort_background,
-                mean=mean,
-                mean_distort=mean_distort,
-                distort_ratio=distort_ratio
+                correctly_predicted=correctly_predicted,
+                correctly_predicted_dist=correctly_predicted_dist,
+                distort_ratio=correctly_predicted_dist/correctly_predicted
             ))
 
     #  Save image to annotation dictionary as json

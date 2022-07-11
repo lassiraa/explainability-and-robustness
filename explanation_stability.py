@@ -132,11 +132,13 @@ if __name__ == '__main__':
                                  reshape_transform=reshape_transform,
                                  use_cuda=torch.cuda.is_available(),
                                  ablation_layer=AblationLayerVit())
+        saliency_method.batch_size = args.batch_size
     else:
         saliency_method = method(model=model,
                                  target_layers=target_layers,
                                  reshape_transform=reshape_transform,
                                  use_cuda=torch.cuda.is_available())
+        saliency_method.batch_size = args.batch_size
     
     corrs = []
     for fname in tqdm(os.listdir(args.in_path)):

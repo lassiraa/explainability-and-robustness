@@ -84,7 +84,8 @@ def calculate_statistics(
             best_score = (f1_score, threshold)
     threshold = best_score[1]
 
-    #  Check how binary predictions change with distortions
+    #  Check how binary predictions change with distortions using best found threshold
+    #  and also one slightly more lenient and strict tresholds
     preds *= distorted_classes
     preds_dist *= distorted_classes
     class_preds = preds.max(axis=1)

@@ -73,7 +73,12 @@ def calculate_statistics(
     threshold = 0.05
     best_score = (0, 0)
     while threshold < 1:
-        f1_score = metrics.f1_score(all_classes, np.where(preds > threshold, 1, 0))
+        #  Calculate F1-score globally by counting the total true positives and negatives
+        #  alongside false positives and negatives.
+        f1_score = metrics.f1_score(
+            all_classes,
+            np.where(preds > threshold, 1, 0),
+            average='micro')
         threshold += 0.05
         if f1_score > best_score[0]:
             best_score = (f1_score, threshold)

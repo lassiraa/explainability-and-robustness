@@ -152,8 +152,8 @@ if __name__ == '__main__':
 
     model = load_model(args.model_name, device)
 
-    distortion_methods = ['perpendicular', 'random_noise', 'random_walk', 'singular_spike']
-    background_distortion_methods = ['blur', 'remove', 'smooth_transition']
+    distortion_methods = ['perpendicular', 'random_noise']
+    background_distortion_methods = ['blur', 'remove', None]
     results = []
 
     for distortion_method in distortion_methods:
@@ -184,5 +184,5 @@ if __name__ == '__main__':
             ))
 
     #  Save image to annotation dictionary as json
-    with open(f'data/{args.model_name}_results.json', 'w') as fp:
+    with open(f'data/{args.model_name}_shape_robustness.json', 'w') as fp:
         json.dump(results, fp)

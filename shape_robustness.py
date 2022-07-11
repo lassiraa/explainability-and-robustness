@@ -198,7 +198,7 @@ if __name__ == '__main__':
                 model_name=args.model_name,
                 distortion_method=distortion_method,
                 distort_background=distort_background,
-                accuracy=accuracy
+                accuracy=accuracy,
                 distort_ratio=distort_ratio,
                 distort_ratio_strict=distort_ratio_strict,
                 distort_ratio_lenient=distort_ratio_lenient

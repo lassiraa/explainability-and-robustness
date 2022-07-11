@@ -232,20 +232,6 @@ class CocoDistortion(VisionDataset):
                     -noise_strength,
                     noise_strength+1,
                     size=2)
-
-        if self.distortion_method == 'random_walk':
-            prev_target = None
-            for idx in range(len_targets):
-                if prev_target is None:
-                    target[idx,:] = calculate_perpendicular_translation(
-                        idx, target, noise_strength+2
-                    )
-                    prev_target = segmentation[idx,:]
-                    continue
-                direction = segmentation[idx,:] - prev_target
-                noise = rng.integers(-1, 2, size=2)
-                target[idx,:] = target[idx-1,:] + direction + noise
-                prev_target = segmentation[idx,:]
         
         if self.distortion_method == 'singular_spike':
             random_idx = rng.integers(0, target.shape[0])
@@ -268,11 +254,11 @@ class CocoDistortion(VisionDataset):
             np.meshgrid(np.arange(image.shape[1]), np.arange(image.shape[0]))
         ).T.reshape(1,-1,2)
 
-        #  Apply transition to all (col, row) points
-        _, new_pts = self.tps.applyTransformation(np.float32(indices))
+        #  Apply transformation to all (col, row) indices
+        _, new_indices = self.tps.applyTransformation(np.float32(indices))
 
         #  Create vector field of the point transitions
-        map_x = new_pts[0,:,0].reshape(image.shape[0], image.shape[1], order='F')
+        map_x = new_indices[0,:,0].reshape(image.shape[0], image.shape[1], order='F')
         ind_x = indices[0,:,0].reshape(image.shape[0], image.shape[1], order='F')
         vector_field_x = map_x - ind_x
         #  Smooth transition of vector field around the object
@@ -285,7 +271,7 @@ class CocoDistortion(VisionDataset):
         map_x = vector_field_x_smoothed + ind_x
         
         #  Repeat smoothing process for y-coordinate
-        map_y = new_pts[0,:,1].reshape(image.shape[0], image.shape[1], order='F')
+        map_y = new_indices[0,:,1].reshape(image.shape[0], image.shape[1], order='F')
         ind_y = indices[0,:,1].reshape(image.shape[0], image.shape[1], order='F')
         vector_field_y = map_y - ind_y
         vector_field_y_smoothed = self._smooth_transition(
@@ -295,6 +281,8 @@ class CocoDistortion(VisionDataset):
             kernel_size=9
         )
         map_y = vector_field_y_smoothed + ind_y
+
+        #  Apply remap with x and y coordinate mappings to obtain thinplate spline result
         image_distorted = cv2.remap(image, map_x, map_y, cv2.INTER_LINEAR)
         return image_distorted
 

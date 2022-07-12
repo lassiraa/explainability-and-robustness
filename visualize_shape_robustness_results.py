@@ -19,7 +19,14 @@ for file in files:
         results += model_res
 
 results_df = pd.DataFrame.from_records(results)
-results_df = results_df[results_df['distort_background'].isnull()]
+results_no_distort = results_df[results_df['distort_background'].isnull()]
+results_blur = results_df[results_df['distort_background'] == 'blur']
 sns.set_theme(style="ticks", color_codes=True)
-ax = sns.scatterplot(x='distortion_method', y='distort_ratio', hue='model_name', style='model_name', data=results_df)
+fig, axs = plt.subplots(ncols=2)
+sns.scatterplot(x='distortion_method', y='distort_ratio', hue='model_name',
+                style='model_name', data=results_no_distort, ax=axs[0], s=80)
+axs[0].set_title('Recovered accuracy with no background alteration')
+sns.scatterplot(x='distortion_method', y='distort_ratio', hue='model_name',
+                style='model_name', data=results_blur, ax=axs[1], s=80)
+axs[1].set_title('Recovered accuracy with blurred background')
 plt.show()

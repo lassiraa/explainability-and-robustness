@@ -1,5 +1,4 @@
 import json
-from cv2 import correctMatches, threshold
 
 import torchvision.models as models
 import torch
@@ -67,7 +66,8 @@ def calculate_statistics(
     preds: np.ndarray,
     preds_dist: np.ndarray,
     distorted_classes: np.ndarray,
-    all_classes: np.ndarray
+    all_classes: np.ndarray,
+    distort_background: str
 ) -> tuple[float]:
     #  Find optimal threshold by F1-score with margin of 0.05
     threshold = 0.05
@@ -75,8 +75,10 @@ def calculate_statistics(
     while threshold < 1:
         #  Calculate F1-score globally by counting the total true positives and negatives
         #  alongside false positives and negatives.
+        #  Use all classes if background is not distorted as all classes should be present,
+        #  otherwise use only the class being distorted.
         f1_score = metrics.f1_score(
-            all_classes,
+            all_classes if distort_background is None else distorted_classes,
             np.where(preds > threshold, 1, 0),
             average='micro')
         threshold += 0.05
@@ -90,14 +92,14 @@ def calculate_statistics(
     preds_dist *= distorted_classes
     class_preds = preds.max(axis=1)
     class_preds_dist = preds_dist.max(axis=1)
-    distort_ratio = len(class_preds[class_preds > threshold]) \
-         / len(class_preds_dist[class_preds_dist > threshold])
-    distort_ratio_strict = len(class_preds[class_preds > threshold + 0.05]) \
-         / len(class_preds_dist[class_preds_dist > threshold + 0.05])
-    distort_ratio_lenient = len(class_preds[class_preds > threshold - 0.05]) \
-         / len(class_preds_dist[class_preds_dist > threshold - 0.05])
-    accuracy = len(class_preds[class_preds > threshold])
-    return accuracy, distort_ratio, distort_ratio_strict, distort_ratio_lenient
+    distort_ratio = len(class_preds_dist[class_preds_dist > threshold]) \
+         / len(class_preds[class_preds > threshold]) 
+    distort_ratio_strict = len(class_preds_dist[class_preds_dist > threshold + .1]) \
+         / len(class_preds[class_preds > threshold + .1])
+    distort_ratio_lenient = len(class_preds_dist[class_preds_dist > threshold - .1]) \
+         / len(class_preds[class_preds > threshold - .1])
+    accuracy = len(class_preds[class_preds > threshold]) / len(class_preds)
+    return accuracy, distort_ratio, distort_ratio_strict, distort_ratio_lenient, threshold
 
 
 def get_model_robustness(
@@ -145,7 +147,7 @@ def get_model_robustness(
     
     preds, preds_dist, distorted_classes, all_classes = measure_shape_robustness(model, coco_loader, device)
 
-    return calculate_statistics(preds, preds_dist, distorted_classes, all_classes)
+    return calculate_statistics(preds, preds_dist, distorted_classes, all_classes, distort_background)
 
 
 if __name__ == '__main__':
@@ -186,7 +188,7 @@ if __name__ == '__main__':
         for distort_background in background_distortion_methods:
             print('Processing', distortion_method, distort_background)
             
-            accuracy, distort_ratio, distort_ratio_strict, distort_ratio_lenient \
+            accuracy, distort_ratio, distort_ratio_strict, distort_ratio_lenient, threshold \
                 = get_model_robustness(
                 model=model,
                 model_name=args.model_name,
@@ -207,7 +209,8 @@ if __name__ == '__main__':
                 accuracy=accuracy,
                 distort_ratio=distort_ratio,
                 distort_ratio_strict=distort_ratio_strict,
-                distort_ratio_lenient=distort_ratio_lenient
+                distort_ratio_lenient=distort_ratio_lenient,
+                threshold=threshold
             ))
 
     #  Save image to annotation dictionary as json

@@ -297,7 +297,7 @@ class CocoDistortion(VisionDataset):
         image_distorted = cv2.remap(image, map_x, map_y, cv2.INTER_LINEAR)
         return image_distorted
 
-    def __getitem__(self, index: int) -> Tuple[Any, Any, Any]:
+    def __getitem__(self, index: int) -> Tuple[Any, Any, Any, Any]:
         id = self.ids[index]
         image = self._load_image(id)
         image = np.array(image)

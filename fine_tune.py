@@ -14,28 +14,38 @@ from utils import CocoClassification
 
 
 def get_model_to_fine_tune(model_name: str, device: torch.device):
-    if 'vgg' in model_name:
-        model = getattr(models, model_name)(pretrained=True)
-        #  Using feature extraction so only output layer is fine-tuned
-        for param in model.parameters():
-            param.requires_grad = False
-        model.classifier[6] = nn.Linear(4096, 80)
 
-    if 'vit_' in model_name:
-        model = getattr(models, model_name)(pretrained=True)
+    if model_name == 'vgg16_bn':
+        model = models.vgg16_bn(weights=models.VGG16_BN_Weights.IMAGENET1K_V1)
         #  Using feature extraction so only output layer is fine-tuned
         for param in model.parameters():
             param.requires_grad = False
-        #  Required as vit_l models have different in_features than vit_b models
+        in_features = model.classifier[6].in_features
+        model.classifier[6] = nn.Linear(in_features, 80)
+
+    if model_name == 'vit_b_32':
+        model = models.vit_b_32(weights=models.ViT_B_32_Weights.IMAGENET1K_V1)
+        #  Using feature extraction so only output layer is fine-tuned
+        for param in model.parameters():
+            param.requires_grad = False
         in_features = model.heads[0].in_features
         model.heads[0] = nn.Linear(in_features, 80)
 
-    if 'resnet' in model_name:
-        model = getattr(models, model_name)(pretrained=True)
+    if model_name == 'swin_t':
+        model = models.swin_t(weights=models.Swin_T_Weights.IMAGENET1K_V1)
         #  Using feature extraction so only output layer is fine-tuned
         for param in model.parameters():
             param.requires_grad = False
-        model.fc = nn.Linear(2048, 80)
+        in_features = model.head.in_features
+        model.head = nn.Linear(in_features, 80)
+
+    if model_name == 'resnet50':
+        model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
+        #  Using feature extraction so only output layer is fine-tuned
+        for param in model.parameters():
+            param.requires_grad = False
+        in_features = model.fc.in_features
+        model.fc = nn.Linear(in_features, 80)
 
     model = model.to(device)
     #  Getting all parameters that need to be optimized
@@ -133,11 +143,7 @@ if __name__ == '__main__':
                         help='workers for dataloader')
     parser.add_argument('--model_name', type=str, default='vit_b_32',
                         help='name of model used for training',
-                        choices=[
-                            'vit_b_32', 'vit_b_16', 'vit_l_32', 'vit_l_16',
-                            'vgg16', 'vgg19', 'vgg16_bn', 'vgg19_bn',
-                            'resnet50', 'resnet101', 'resnet152'
-                        ])
+                        choices=['vit_b_32', 'vgg16_bn', 'resnet50', 'swin_t'])
     parser.add_argument('--checkpoint_dir', type=str,
                         default='/media/lassi/Data/checkpoints/model.pt',
                         help='path to save checkpoint')
@@ -159,7 +165,7 @@ if __name__ == '__main__':
     )
     wandb.config = training_params
 
-    if 'vit_' in args.model_name:
+    if 'vit_' or 'swin_' in args.model_name:
         mean = [.5, .5, .5]
         std = [.5, .5, .5]
     else:
@@ -167,7 +173,6 @@ if __name__ == '__main__':
         std = [0.229, 0.224, 0.225]
 
     train_transform = transforms.Compose([
-        transforms.Resize(256),
         transforms.RandomResizedCrop(224),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
@@ -175,7 +180,7 @@ if __name__ == '__main__':
                              std=std)
     ])
     val_transform = transforms.Compose([
-        transforms.Resize(256),
+        transforms.Resize(224),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize(mean=mean,

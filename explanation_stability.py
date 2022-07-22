@@ -14,7 +14,6 @@ from pytorch_grad_cam import GradCAM, \
     AblationCAM, \
     XGradCAM, \
     EigenCAM, \
-    EigenGradCAM, \
     LayerCAM, \
     FullGrad, \
     GuidedBackpropReLUModel
@@ -50,6 +49,7 @@ def calculate_mean_correlation(
         #  Process saliency map
         if is_backprop:
             saliency_map = saliency_method(input, target_category=class_idx)
+            saliency_map = saliency_map.sum(axis=2).reshape(224, 224)
         else:
             saliency_map = saliency_method(input, [ClassifierOutputTarget(class_idx)])[0, :]
 
@@ -72,11 +72,7 @@ if __name__ == '__main__':
                         help='batch size for cam methods')
     parser.add_argument('--model_name', type=str, default='resnet50',
                         help='name of model used for inference',
-                        choices=[
-                            'vit_b_32', 'vit_b_16', 'vit_l_32', 'vit_l_16',
-                            'vgg16', 'vgg19', 'vgg16_bn', 'vgg19_bn',
-                            'resnet50', 'resnet101', 'resnet152'
-                        ])
+                        choices=['vit_b_32', 'swin_t', 'vgg16_bn', 'resnet50'])
     parser.add_argument('--method', type=str, default='gradcam',
                         choices=['gradcam', 'gradcam++',
                                  'scorecam', 'xgradcam',
@@ -92,7 +88,7 @@ if __name__ == '__main__':
     model, target_layers = load_model_with_target_layers(args.model_name, device)
 
     reshape_transform = None
-    is_vit = 'vit_' == args.model_name[:4]
+    is_vit = args.model_name in ['vit_b_32', 'swin_t']
 
     mean = [0.485, 0.456, 0.406]
     std = [0.229, 0.224, 0.225]

@@ -15,19 +15,25 @@ def load_model(
     model_name: str,
     device: torch.device
 ) -> nn.Module:
-    if 'vgg' in model_name:
-        model = getattr(models, model_name)(pretrained=False)
-        model.classifier[6] = nn.Linear(4096, 80)
+    if model_name == 'vgg16_bn':
+        model = models.vgg16_bn(weights=None)
+        in_features = model.classifier[6].in_features
+        model.classifier[6] = nn.Linear(in_features, 80)
 
-    if 'vit_' in model_name:
-        model = getattr(models, model_name)(pretrained=False)
-        #  Required as vit_l models have different in_features than vit_b models
+    if model_name == 'vit_b_32':
+        model = models.vit_b_32(weights=None)
         in_features = model.heads[0].in_features
         model.heads[0] = nn.Linear(in_features, 80)
 
-    if 'resnet' in model_name:
-        model = getattr(models, model_name)(pretrained=False)
-        model.fc = nn.Linear(2048, 80)
+    if model_name == 'swin_t':
+        model = models.swin_t(weights=None)
+        in_features = model.head.in_features
+        model.head = nn.Linear(in_features, 80)
+
+    if model_name == 'resnet50':
+        model = models.resnet50(weights=None)
+        in_features = model.fc.in_features
+        model.fc = nn.Linear(in_features, 80)
     
     model.load_state_dict(torch.load(f'{model_name}_coco.pt'))
     model.eval()
@@ -114,7 +120,7 @@ def get_model_robustness(
     batch_size: int,
     num_workers: int
 ) -> None:
-    if 'vit_' in model_name:
+    if model_name in ['vit_b_32', 'swin_t']:
         mean = [.5, .5, .5]
         std = [.5, .5, .5]
     else:
@@ -168,11 +174,7 @@ if __name__ == '__main__':
                         help='workers for dataloader')
     parser.add_argument('--model_name', type=str, default='vit_b_32',
                         help='name of model used for inference',
-                        choices=[
-                            'vit_b_32', 'vit_b_16', 'vit_l_32', 'vit_l_16',
-                            'vgg16', 'vgg19', 'vgg16_bn', 'vgg19_bn',
-                            'resnet50', 'resnet101', 'resnet152'
-                        ])
+                        choices=['vit_b_32', 'swin_t', 'vgg16_bn', 'resnet50'])
     args = parser.parse_args()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

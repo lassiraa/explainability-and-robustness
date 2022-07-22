@@ -1,4 +1,3 @@
-from math import dist
 from typing import Any, Callable, Optional, Tuple, List
 import os
 import json
@@ -21,21 +20,28 @@ def load_model_with_target_layers(
     model_name: str,
     device: torch.device
 ) -> nn.Module:
-    if 'vgg' in model_name:
-        model = getattr(models, model_name)(pretrained=False)
-        model.classifier[6] = nn.Linear(4096, 80)
+    if model_name == 'vgg16_bn':
+        model = models.vgg16_bn(weights=None)
+        in_features = model.classifier[6].in_features
+        model.classifier[6] = nn.Linear(in_features, 80)
         target_layers = [model.features[-1]]
 
-    if 'vit_' in model_name:
-        model = getattr(models, model_name)(pretrained=False)
-        #  Required as vit_l models have different in_features than vit_b models
+    if model_name == 'vit_b_32':
+        model = models.vit_b_32(weights=None)
         in_features = model.heads[0].in_features
         model.heads[0] = nn.Linear(in_features, 80)
         target_layers = [model.encoder.layers[-1].ln_1]
 
-    if 'resnet' in model_name:
-        model = getattr(models, model_name)(pretrained=False)
-        model.fc = nn.Linear(2048, 80)
+    if model_name == 'swin_t':
+        model = models.swin_t(weights=None)
+        in_features = model.head.in_features
+        model.head = nn.Linear(in_features, 80)
+        target_layers = [model.features[-1][-1].norm1]
+
+    if model_name == 'resnet50':
+        model = models.resnet50(weights=None)
+        in_features = model.fc.in_features
+        model.fc = nn.Linear(in_features, 80)
         target_layers = [model.layer4[-1]]
     
     model.load_state_dict(torch.load(f'{model_name}_coco.pt'))
@@ -71,8 +77,7 @@ def calculate_mass_within(
     return (mass_within / mass).item()
 
 
-def reshape_transform_vit(tensor):
-    dim = int(np.sqrt(tensor[:, 1:, :].shape[1]))
+def reshape_transform_vit(tensor, dim=7):
     result = tensor[:, 1:, :].reshape(tensor.size(0),
                                       dim, dim, tensor.size(2))
 

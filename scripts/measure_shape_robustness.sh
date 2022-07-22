@@ -3,7 +3,7 @@ images_dir="/media/lassi/Data/datasets/coco/images/val2017/"
 ann_path="/media/lassi/Data/datasets/coco/annotations/instances_val2017.json"
 
 # Models to try
-models="resnet50 vit_b_32 vgg16"
+models="resnet50 vit_b_32 vgg16_bn swin_t"
 
 # Other parameters
 batch_size=100

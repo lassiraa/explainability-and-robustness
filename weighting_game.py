@@ -1,13 +1,11 @@
 import json
-from typing import Any, Callable
+from typing import Callable
 from functools import partial
 
 import cv2
-import torchvision.models as models
 import torch
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
-import torch.nn as nn
 import numpy as np
 from pytorch_grad_cam import GradCAM, \
     ScoreCAM, \
@@ -15,7 +13,6 @@ from pytorch_grad_cam import GradCAM, \
     AblationCAM, \
     XGradCAM, \
     EigenCAM, \
-    EigenGradCAM, \
     LayerCAM, \
     FullGrad, \
     GuidedBackpropReLUModel
@@ -124,11 +121,7 @@ if __name__ == '__main__':
                         help='workers for dataloader')
     parser.add_argument('--model_name', type=str, default='resnet50',
                         help='name of model used for inference',
-                        choices=[
-                            'vit_b_32', 'vit_b_16', 'vit_l_32', 'vit_l_16',
-                            'vgg16', 'vgg19', 'vgg16_bn', 'vgg19_bn',
-                            'resnet50', 'resnet101', 'resnet152'
-                        ])
+                        choices=['vit_b_32', 'swin_t', 'vgg16_bn', 'resnet50'])
     parser.add_argument('--method', type=str, default='gradcam',
                         choices=['gradcam', 'gradcam++',
                                  'scorecam', 'xgradcam',
@@ -144,7 +137,7 @@ if __name__ == '__main__':
     model, target_layers = load_model_with_target_layers(args.model_name, device)
 
     reshape_transform = None
-    is_vit = 'vit_' == args.model_name[:4]
+    is_vit = args.model_name in ['vit_b_32', 'swin_t']
 
     if is_vit:
         reshape_transform = reshape_transform_vit

@@ -37,8 +37,8 @@ def calculate_mean_correlation(
 
     for i, frame in enumerate(video.iter_frames()):
         
-        #  Only process first 10 frames and last 10 frames
-        if i > 10 and i < 139:
+        #  Process 5 pairs of frames per video, so 10 frames in total
+        if ((i+2) % 29 != 0) and ((i + 1) % 29 != 0):
             prev_saliency = None
             continue
 

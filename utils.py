@@ -78,8 +78,12 @@ def calculate_mass_within(
 
 
 def reshape_transform_vit(tensor, dim=7):
-    result = tensor[:, 1:, :].reshape(tensor.size(0),
-                                      dim, dim, tensor.size(2))
+    #  Needed for ViT but not for Swin
+    if tensor.shape[1] == (dim * dim + 1):
+        tensor = tensor[:, 1:, :]
+    
+    result = tensor.reshape(tensor.size(0),
+                            dim, dim, -1)
 
     #  Bring the channels to the first dimension,
     #  like in CNNs.

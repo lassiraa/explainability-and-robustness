@@ -67,7 +67,7 @@ def measure_shape_robustness(
     
     return preds, preds_dist, distorted_classes, all_classes
 
-
+# todo add f1 score to results
 def calculate_statistics(
     preds: np.ndarray,
     preds_dist: np.ndarray,
@@ -90,7 +90,7 @@ def calculate_statistics(
         threshold += 0.05
         if f1_score > best_score[0]:
             best_score = (f1_score, threshold)
-    threshold = best_score[1]
+    f1_score, threshold = best_score
 
     #  Check how binary predictions change with distortions using best found threshold
     #  and also one slightly more lenient and strict tresholds
@@ -105,7 +105,7 @@ def calculate_statistics(
     distort_ratio_lenient = len(class_preds_dist[class_preds_dist > threshold - .1]) \
          / len(class_preds[class_preds > threshold - .1])
     accuracy = len(class_preds[class_preds > threshold]) / len(class_preds)
-    return accuracy, distort_ratio, distort_ratio_strict, distort_ratio_lenient, threshold
+    return accuracy, distort_ratio, distort_ratio_strict, distort_ratio_lenient, threshold, f1_score
 
 
 def get_model_robustness(
@@ -181,39 +181,39 @@ if __name__ == '__main__':
 
     model = load_model(args.model_name, device)
 
-    distortion_methods = ['perpendicular', 'random_noise']
-    background_distortion_methods = ['blur', None]
+    distortion_method = 'perpendicular'
+    background_distortion_methods = ['blur', 'remove', None]
     results = []
 
-    for distortion_method in distortion_methods:
         
-        for distort_background in background_distortion_methods:
-            print('Processing', distortion_method, distort_background)
-            
-            accuracy, distort_ratio, distort_ratio_strict, distort_ratio_lenient, threshold \
-                = get_model_robustness(
-                model=model,
-                model_name=args.model_name,
-                device=device,
-                distortion_method=distortion_method,
-                distort_background=distort_background,
-                path2data=args.images_dir,
-                path2json=args.ann_path,
-                path2idjson=args.id_path,
-                batch_size=args.batch_size,
-                num_workers=args.num_workers
-            )
+    for distort_background in background_distortion_methods:
+        print('Processing', distortion_method, distort_background)
+        
+        accuracy, distort_ratio, distort_ratio_strict, distort_ratio_lenient, \
+            threshold, f1_score = get_model_robustness(
+            model=model,
+            model_name=args.model_name,
+            device=device,
+            distortion_method=distortion_method,
+            distort_background=distort_background,
+            path2data=args.images_dir,
+            path2json=args.ann_path,
+            path2idjson=args.id_path,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers
+        )
 
-            results.append(dict(
-                model_name=args.model_name,
-                distortion_method=distortion_method,
-                distort_background=distort_background,
-                accuracy=accuracy,
-                distort_ratio=distort_ratio,
-                distort_ratio_strict=distort_ratio_strict,
-                distort_ratio_lenient=distort_ratio_lenient,
-                threshold=threshold
-            ))
+        results.append(dict(
+            model_name=args.model_name,
+            distortion_method=distortion_method,
+            distort_background=distort_background,
+            accuracy=accuracy,
+            distort_ratio=distort_ratio,
+            distort_ratio_strict=distort_ratio_strict,
+            distort_ratio_lenient=distort_ratio_lenient,
+            threshold=threshold,
+            f1_score=f1_score
+        ))
 
     #  Save image to annotation dictionary as json
     with open(f'data/{args.model_name}_shape_robustness.json', 'w') as fp:

@@ -176,7 +176,7 @@ if __name__ == '__main__':
                              std=std)
     ])
     val_transform = transforms.Compose([
-        transforms.Resize(224),
+        transforms.Resize(256),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize(mean=mean,

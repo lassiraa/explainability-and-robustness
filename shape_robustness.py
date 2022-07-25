@@ -120,14 +120,10 @@ def get_model_robustness(
     batch_size: int,
     num_workers: int
 ) -> None:
-    if model_name in ['vit_b_32', 'swin_t']:
-        mean = [.5, .5, .5]
-        std = [.5, .5, .5]
-    else:
-        mean = [0.485, 0.456, 0.406]
-        std = [0.229, 0.224, 0.225]
+    mean = [0.485, 0.456, 0.406]
+    std = [0.229, 0.224, 0.225]
     val_transform = transforms.Compose([
-        transforms.Resize(256),
+        transforms.Resize(224),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize(mean=mean,

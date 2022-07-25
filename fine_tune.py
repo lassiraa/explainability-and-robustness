@@ -165,12 +165,8 @@ if __name__ == '__main__':
     )
     wandb.config = training_params
 
-    if 'vit_' or 'swin_' in args.model_name:
-        mean = [.5, .5, .5]
-        std = [.5, .5, .5]
-    else:
-        mean = [0.485, 0.456, 0.406]
-        std = [0.229, 0.224, 0.225]
+    mean = [0.485, 0.456, 0.406]
+    std = [0.229, 0.224, 0.225]
 
     train_transform = transforms.Compose([
         transforms.RandomResizedCrop(224),

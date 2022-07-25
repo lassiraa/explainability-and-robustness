@@ -65,18 +65,14 @@ def measure_weighting_game(
 
 
 def get_dataloader(
-    is_vit: bool,
     path2data: str,
     path2json: str,
     num_workers: int
 ) -> None:
     mean = [0.485, 0.456, 0.406]
     std = [0.229, 0.224, 0.225]
-    if is_vit:
-        mean = [0.5, 0.5, 0.5]
-        std = [0.5, 0.5, 0.5]
     image_transform = transforms.Compose([
-        transforms.Resize(256),
+        transforms.Resize(224),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize(mean=mean, std=std)
@@ -85,7 +81,7 @@ def get_dataloader(
     mask_transform = transforms.Compose([
         mask_dilation,
         transforms.ToTensor(),
-        transforms.Resize(256),
+        transforms.Resize(224),
         transforms.CenterCrop(224)
     ])
 
@@ -174,7 +170,6 @@ if __name__ == '__main__':
         saliency_method.batch_size = args.batch_size
             
     coco_loader = get_dataloader(
-        is_vit=is_vit,
         path2data=args.images_dir,
         path2json=args.ann_path,
         num_workers=args.num_workers

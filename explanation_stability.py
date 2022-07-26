@@ -20,7 +20,7 @@ from pytorch_grad_cam import GradCAM, \
 from pytorch_grad_cam.ablation_layer import AblationLayerVit
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 
-from utils import reshape_transform_vit, load_model_with_target_layers
+from utils import reshape_transform_vit, load_model_with_target_layers, scale_image
 
 
 def calculate_mean_correlation(
@@ -50,6 +50,8 @@ def calculate_mean_correlation(
         if is_backprop:
             saliency_map = saliency_method(input, target_category=class_idx)
             saliency_map = saliency_map.sum(axis=2).reshape(224, 224)
+            saliency_map = np.where(saliency_map > 0, saliency_map, 0)
+            saliency_map = scale_image(saliency_map, 1)
         else:
             saliency_map = saliency_method(input, [ClassifierOutputTarget(class_idx)])[0, :]
 

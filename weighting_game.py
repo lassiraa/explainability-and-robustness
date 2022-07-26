@@ -21,7 +21,7 @@ from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 from tqdm import tqdm
 
 from utils import CocoExplainabilityMeasurement, calculate_mass_within, reshape_transform_vit, \
-    load_model_with_target_layers
+    load_model_with_target_layers, scale_image
 
 
 def measure_weighting_game(
@@ -46,8 +46,10 @@ def measure_weighting_game(
             #  Process saliency map
             if is_backprop:
                 saliency_map = saliency_method(inputs, target_category=idx)
-                saliency_map = torch.from_numpy(saliency_map).to(device)
                 saliency_map = saliency_map.sum(axis=2).reshape(1, 224, 224)
+                saliency_map = np.where(saliency_map > 0, saliency_map, 0)
+                saliency_map = scale_image(saliency_map, 1)
+                saliency_map = torch.from_numpy(saliency_map).to(device)
             else:
                 saliency_map = saliency_method(inputs, [ClassifierOutputTarget(idx)])
                 saliency_map = torch.from_numpy(saliency_map).to(device)
@@ -77,7 +79,7 @@ def get_dataloader(
         transforms.ToTensor(),
         transforms.Normalize(mean=mean, std=std)
     ])
-    mask_dilation = partial(cv2.dilate, kernel=np.ones((7,7)), iterations=1)
+    mask_dilation = partial(cv2.dilate, kernel=np.ones((9,9)), iterations=1)
     mask_transform = transforms.Compose([
         mask_dilation,
         transforms.ToTensor(),

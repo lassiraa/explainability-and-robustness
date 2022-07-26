@@ -10,10 +10,13 @@ import cv2
 from pycocotools.coco import COCO
 from torchvision.datasets import VisionDataset
 from PIL import Image
-from skimage.segmentation import find_boundaries
 
 
 rng = np.random.default_rng(51)
+
+
+def scale_image(img, max=1):
+    return (img - img.min()) * (1/(img.max() - img.min()) * max)
 
 
 def load_model_with_target_layers(
@@ -194,7 +197,7 @@ class CocoDistortion(VisionDataset):
         kernel_size: int
     ) -> np.ndarray:
         step_multiplier = 1 / (steps + 1)
-        kernel = np.ones((kernel_size+2, kernel_size+2), np.float32)
+        kernel = np.ones((kernel_size, kernel_size), np.float32)
         mask = cv2.dilate(mask, kernel, iterations=1)
         result = vector_field * mask
         

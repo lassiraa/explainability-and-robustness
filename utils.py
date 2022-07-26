@@ -15,7 +15,10 @@ from PIL import Image
 rng = np.random.default_rng(51)
 
 
-def scale_image(img, max=1):
+def scale_image(
+    img: Any,
+    max: int = 1
+) -> Any:
     return (img - img.min()) * (1/(img.max() - img.min()) * max)
 
 
@@ -74,7 +77,6 @@ def calculate_mass_within(
     saliency_map: torch.tensor,
     class_mask: torch.tensor
 ) -> float:
-    class_mask = class_mask
     mass = saliency_map.sum()
     mass_within = (saliency_map * class_mask).sum()
     return (mass_within / mass).item()

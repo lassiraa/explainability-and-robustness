@@ -110,7 +110,6 @@ def calculate_statistics(
 
 def get_model_robustness(
     model: nn.Module,
-    model_name: str,
     device: torch.device,
     distortion_method: str,
     distort_background: str,
@@ -188,7 +187,6 @@ if __name__ == '__main__':
         accuracy, distort_ratio, distort_ratio_strict, distort_ratio_lenient, \
             threshold, f1_score = get_model_robustness(
             model=model,
-            model_name=args.model_name,
             device=device,
             distortion_method=distortion_method,
             distort_background=distort_background,

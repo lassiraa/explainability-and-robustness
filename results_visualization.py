@@ -58,12 +58,20 @@ def read_weighting_game(path='./data/'):
             method = meta[1]
             res = json.load(f)
             accuracies = np.array([entry['accuracy'] for entry in res])
+            areas = np.array([entry['object_area'] for entry in res])
+            areas = areas[~np.isnan(accuracies)]
             accuracies = accuracies[~np.isnan(accuracies)]
+            # bins = np.logspace(np.log10(areas.min()), np.log10(areas.max()), 10)
+            num_bins = 40
+            bins = np.linspace(np.floor(areas.min()), np.ceil(areas.max()), num_bins)
+            digitized = np.digitize(areas, bins) / num_bins
             mean = np.mean(accuracies)
             results.append(dict(
                 model_name=model_name,
                 method=method,
-                mean=mean
+                mean=mean,
+                accuracies=accuracies,
+                digitized=digitized
             ))
     
     return pd.DataFrame.from_records(results).sort_values(by=['method', 'model_name'])
@@ -87,8 +95,14 @@ def plot_shape_robustness(data):
     data['distort_background'].fillna('None', inplace=True)
     data['distort_background'].replace(dict(blur='Blur', remove='Remove'), inplace=True)
     sns.set_theme(style='ticks', color_codes=True)
-    ax = sns.scatterplot(x='distort_background', y='distort_ratio', hue='model_name',
-                         style='model_name', data=data, s=80)
+    ax = sns.scatterplot(
+        x='distort_background',
+        y='distort_ratio',
+        hue='model_name',
+        style='model_name',
+        data=data,
+        s=80
+    )
     ax.set(xlabel='Background processing', ylabel='Retained accuracy')
     ax.legend(title='Model')
     plt.show()
@@ -106,14 +120,40 @@ def plot_stability(data, by='method', labels='model_name'):
 
 def plot_weighting_game(data, by='method', labels='model_name'):
     data = clean_model_name(data)
+    ax = sns.lineplot(x=data['digitized'].iloc[0], y=data['accuracies'].iloc[0])
+    plt.show()
     sns.set_theme(style='ticks', color_codes=True)
-    ax = sns.scatterplot(x=by, y='mean', hue=labels,
-                         style=labels, data=data, s=80)
+    ax = sns.scatterplot(
+        x=by,
+        y='mean',
+        hue=labels,
+        style=labels,
+        data=data,
+        s=80
+    )
     ax.set(xlabel='Method', ylabel='Mean accuracy')
     ax.legend(title='Model')
     plt.show()
 
 
+def plot_binned_weighting_game(data):
+    data = clean_model_name(data)
+    for model_name in data['model_name'].unique():
+        pruned = data[data['model_name'] == model_name]
+        exploded = pruned.explode(['accuracies', 'digitized'])
+        grouped = exploded.groupby(['method', 'digitized'])\
+            .agg({'accuracies': 'mean'})\
+            .reset_index()
+        sns.lineplot(
+            x='digitized',
+            y='accuracies',
+            hue='method',
+            style='method',
+            data=grouped
+        )
+        plt.show()
+
+
 if __name__ == '__main__':
     data = read_weighting_game()
-    plot_weighting_game(data)
+    plot_binned_weighting_game(data)

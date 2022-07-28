@@ -50,8 +50,7 @@ def load_model_with_target_layers(
         model.fc = nn.Linear(in_features, 80)
         target_layers = [model.layer4[-1]]
     
-    model.load_state_dict(torch.load(f'{model_name}_coco.pt'))
-    model.to(device)
+    model.load_state_dict(torch.load(f'{model_name}_coco.pt', map_location=device))
     return model, target_layers
 
 

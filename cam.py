@@ -1,3 +1,6 @@
+from typing import Any
+import time
+
 import torch
 import torchvision.transforms as transforms
 import numpy as np
@@ -18,6 +21,22 @@ import cv2
 from utils import reshape_transform_vit, load_model_with_target_layers, scale_image
 
 
+def process_saliency(
+    input: torch.tensor,
+    saliency_method: Any,
+    args: Any,
+    is_backprop: bool,
+) -> np.ndarray:
+    if is_backprop:
+        saliency_map = saliency_method(input, target_category=args.class_idx)
+        saliency_map = saliency_map.sum(axis=2).reshape(224, 224)
+        saliency_map = np.where(saliency_map > 0, saliency_map, 0)
+        saliency_map = scale_image(saliency_map, 1)
+    else:
+        saliency_map = saliency_method(input, [ClassifierOutputTarget(args.class_idx)])[0, :]
+    return saliency_map
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Create CAM visualization of video for highest prob. class')
@@ -25,7 +44,7 @@ if __name__ == '__main__':
                         help='path to image')
     parser.add_argument('--class_idx', type=int, required=True,
                         help='desired class id from coco', default=17)
-    parser.add_argument('--batch_size', type=int, default=32,
+    parser.add_argument('--batch_size', type=int, default=100,
                         help='batch size for cam methods')
     parser.add_argument('--num_workers', type=int, default=16,
                         help='workers for dataloader')
@@ -98,17 +117,17 @@ if __name__ == '__main__':
     rgb_img = cv2.imread(f'{args.in_path}', 1)[:, :, ::-1]
     rgb_img = np.float32(rgb_img) / 255
     input = image_transform(rgb_img)
+    rgb_img = np.moveaxis(input.numpy(), 0, -1)
     input = image_normalize(input)
     input = input.to(device=device, dtype=torch.float32).unsqueeze(0)
 
     #  Process saliency map
-    if is_backprop:
-        saliency_map = saliency_method(input, target_category=args.class_idx)
-        saliency_map = saliency_map.sum(axis=2).reshape(224, 224)
-        saliency_map = np.where(saliency_map > 0, saliency_map, 0)
-        saliency_map = scale_image(saliency_map, 1)
-    else:
-        saliency_map = saliency_method(input, [ClassifierOutputTarget(args.class_idx)])[0, :]
+    start = time.time()
+    for _ in range(10):
+        saliency_map = process_saliency(input, saliency_method, args, is_backprop)
+    time_taken = time.time() - start
+    print(f'Time for 10 iterations using {args.method}/{args.model_name}: {time_taken:.3f}s')
+
 
     cam_image = show_cam_on_image(rgb_img, saliency_map, use_rgb=True)
     cam_image = cv2.cvtColor(cam_image, cv2.COLOR_RGB2BGR)

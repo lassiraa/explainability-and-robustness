@@ -9,36 +9,36 @@ for model in $models; do
             --method ${method} \
             --model_name ${model} \
             --in_path examples/both.png \
-            --class_idx 16
+            --class_idx 15
 
         python cam.py \
             --method ${method} \
             --model_name ${model} \
             --in_path examples/both.png \
-            --class_idx 17
+            --class_idx 16
 
         python cam.py \
             --method ${method} \
             --model_name ${model} \
             --in_path examples/person_dog.png \
-            --class_idx 1
+            --class_idx 0
 
         python cam.py \
             --method ${method} \
             --model_name ${model} \
             --in_path examples/person_dog.png \
-            --class_idx 17
-
-        python cam.py \
-            --method ${method} \
-            --model_name ${model} \
-            --in_path examples/person_bike.jpg \
-            --class_idx 2
+            --class_idx 16
 
         python cam.py \
             --method ${method} \
             --model_name ${model} \
             --in_path examples/person_bike.jpg \
             --class_idx 1
+
+        python cam.py \
+            --method ${method} \
+            --model_name ${model} \
+            --in_path examples/person_bike.jpg \
+            --class_idx 0
     done
 done

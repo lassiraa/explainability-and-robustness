@@ -137,7 +137,7 @@ def plot_weighting_game(data, by='method', labels='model_name'):
 def plot_binned_weighting_game(data):
     data = clean_model_name(data)
     indices = [(0,0), (0,1), (1,0), (1,1)]
-    fig, axs = plt.subplots(2, 2, figsize=(15, 15))
+    fig, axs = plt.subplots(2, 2, figsize=(10, 10))
     for i, model_name in enumerate(data['model_name'].unique()):
         pruned = data[data['model_name'] == model_name]
         exploded = pruned.explode(['accuracies', 'digitized'])
@@ -152,7 +152,13 @@ def plot_binned_weighting_game(data):
             data=grouped,
             ax=axs[indices[i]]
         )
-        ax.set(title=model_name)
+        ax.get_legend().remove()
+        ax.set(title=model_name, ylabel=None, xlabel=None)
+    lines_labels = [ax.get_legend_handles_labels() for ax in fig.axes]
+    lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
+    fig.legend(lines[:6], labels[:6], loc='upper center')
+    fig.supxlabel('Ratio of object area to size of image')
+    fig.supylabel('Mean accuracy')
     plt.show()
 
 

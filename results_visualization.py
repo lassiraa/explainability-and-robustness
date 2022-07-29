@@ -84,7 +84,8 @@ def clean_model_name(data):
         resnet50='ResNet50',
         vgg16_bn='VGG16-BN',
         vgg16='VGG16-BN',
-        swin_t='Swin-T'
+        swin_t='Swin-T',
+        swin='Swin-T'
     ))
     return data
     
@@ -111,8 +112,7 @@ def plot_shape_robustness(data):
 def plot_stability(data, by='method', labels='model_name'):
     data = clean_model_name(data)
     sns.set_theme(style='ticks', color_codes=True)
-    ax = sns.scatterplot(x=by, y='mean', hue=labels,
-                         style=labels, data=data, s=80)
+    ax = sns.barplot(x=by, y='mean', hue=labels, data=data)
     ax.set(xlabel='Method', ylabel='Mean correlation')
     ax.legend(title='Model')
     plt.show()
@@ -120,8 +120,6 @@ def plot_stability(data, by='method', labels='model_name'):
 
 def plot_weighting_game(data, by='method', labels='model_name'):
     data = clean_model_name(data)
-    ax = sns.lineplot(x=data['digitized'].iloc[0], y=data['accuracies'].iloc[0])
-    plt.show()
     sns.set_theme(style='ticks', color_codes=True)
     ax = sns.scatterplot(
         x=by,
@@ -138,20 +136,24 @@ def plot_weighting_game(data, by='method', labels='model_name'):
 
 def plot_binned_weighting_game(data):
     data = clean_model_name(data)
-    for model_name in data['model_name'].unique():
+    indices = [(0,0), (0,1), (1,0), (1,1)]
+    fig, axs = plt.subplots(2, 2, figsize=(15, 15))
+    for i, model_name in enumerate(data['model_name'].unique()):
         pruned = data[data['model_name'] == model_name]
         exploded = pruned.explode(['accuracies', 'digitized'])
         grouped = exploded.groupby(['method', 'digitized'])\
             .agg({'accuracies': 'mean'})\
             .reset_index()
-        sns.lineplot(
+        ax = sns.lineplot(
             x='digitized',
             y='accuracies',
             hue='method',
             style='method',
-            data=grouped
+            data=grouped,
+            ax=axs[indices[i]]
         )
-        plt.show()
+        ax.set(title=model_name)
+    plt.show()
 
 
 if __name__ == '__main__':

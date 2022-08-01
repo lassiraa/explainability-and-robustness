@@ -122,11 +122,12 @@ if __name__ == '__main__':
     input = input.to(device=device, dtype=torch.float32).unsqueeze(0)
 
     #  Process saliency map
-    start = time.time()
-    for _ in range(10):
-        saliency_map = process_saliency(input, saliency_method, args, is_backprop)
-    time_taken = time.time() - start
-    print(f'Time for 10 iterations using {args.method}/{args.model_name}: {time_taken:.3f}s')
+    # start = time.time()
+    # for _ in range(10):
+    #     saliency_map = process_saliency(input, saliency_method, args, is_backprop)
+    # time_taken = time.time() - start
+    # print(f'Time for 10 iterations using {args.method}/{args.model_name}: {time_taken:.3f}s')
+    saliency_map = process_saliency(input, saliency_method, args, is_backprop)
 
 
     cam_image = show_cam_on_image(rgb_img, saliency_map, use_rgb=True)

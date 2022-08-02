@@ -66,12 +66,14 @@ def read_weighting_game(path='./data/'):
             bins = np.linspace(np.floor(areas.min()), np.ceil(areas.max()), num_bins)
             digitized = np.digitize(areas, bins) / num_bins
             mean = np.mean(accuracies)
+            mean_area = np.mean(areas)
             results.append(dict(
                 model_name=model_name,
                 method=method,
                 mean=mean,
                 accuracies=accuracies,
-                digitized=digitized
+                digitized=digitized,
+                mean_area=mean_area
             ))
     
     return pd.DataFrame.from_records(results).sort_values(by=['method', 'model_name'])
@@ -87,6 +89,15 @@ def clean_model_name(data):
         swin_t='Swin-T',
         swin='Swin-T'
     ))
+    if 'method' in data:
+        data['method'] = data['method'].replace({
+            'gradcam': 'Grad-CAM',
+            'gradcam++': 'Grad-CAM++',
+            'ablationcam': 'Ablation-CAM',
+            'xgradcam': 'XGrad-CAM',
+            'guidedbackprop': 'Guided Backprop.',
+            'layercam': 'Layer-CAM'
+        })
     return data
     
 
@@ -129,6 +140,7 @@ def plot_weighting_game(data, by='method', labels='model_name'):
         data=data,
         s=80
     )
+    plt.axhline(y=data['mean_area'].iloc[0]/(224*224))
     ax.set(xlabel='Method', ylabel='Mean accuracy')
     ax.legend(title='Model')
     plt.show()

@@ -45,7 +45,7 @@ def read_stability(path='./data/'):
     return pd.DataFrame.from_records(results).sort_values(by=['method', 'model_name'])
 
 
-def read_weighting_game(path='./data/'):
+def read_weighting_game(path='./data/', max_object_area=None):
     files = os.listdir(path)
     results = []
 
@@ -61,6 +61,9 @@ def read_weighting_game(path='./data/'):
             areas = np.array([entry['object_area'] for entry in res])
             areas = areas[~np.isnan(accuracies)]
             accuracies = accuracies[~np.isnan(accuracies)]
+            if max_object_area is not None:
+                accuracies = accuracies[areas <= max_object_area*224*224]
+                areas = areas[areas <= max_object_area*224*224]
             # bins = np.logspace(np.log10(areas.min()), np.log10(areas.max()), 10)
             num_bins = 40
             bins = np.linspace(np.floor(areas.min()), np.ceil(areas.max()), num_bins)

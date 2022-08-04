@@ -6,7 +6,7 @@ models="resnet50 vit_b_32 vgg16_bn swin_t"
 
 for model in $models; do
     for method in $methods; do
-        python explanation_stability.py \
+        python explanation_stability_video.py \
             --method ${method} \
             --model ${model} \
             --in_path ${video_dir}

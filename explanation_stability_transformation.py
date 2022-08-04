@@ -68,8 +68,10 @@ def measure_stability(
         saliency_map = resized_crop(saliency_map, i, j, h, w, size=(224,224))
         saliency_map = saliency_map.numpy()
         corr, _ = stats.spearmanr(cropped_saliency_map, saliency_map, axis=None)
-        correlations.append(corr)
-        print(np.mean(correlations))
+        #  Correlation is not defined for constant arrays, which can happen.
+        #  Therefore we skip those.
+        if corr:
+            correlations.append(corr)
 
     return correlations
 
@@ -114,7 +116,7 @@ def get_dataloader(
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description='Measure accuracy of explanation method')
+    parser = argparse.ArgumentParser(description='Measure explanation stability using zoom/pan')
     parser.add_argument('--images_dir', type=str,
                         default='/media/lassi/Data/datasets/coco/images/val2017/',
                         help='path to coco root directory containing image folders')
@@ -194,5 +196,5 @@ if __name__ == '__main__':
     )
 
     #  Save image to annotation dictionary as json
-    with open(f'data/{args.model_name}-{args.method}-weighting_game.json', 'w') as fp:
+    with open(f'data/{args.model_name}-{args.method}-transformation_stability.json', 'w') as fp:
         json.dump(results, fp)

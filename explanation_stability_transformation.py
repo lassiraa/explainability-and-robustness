@@ -55,19 +55,28 @@ def measure_stability(
     correlations = []
 
     for input in tqdm(coco_loader):
+        #  Process randomized zoom and pan via random resized crop.
         i, j, h, w = transforms.RandomResizedCrop.get_params(input, scale=(0.75, 0.9), ratio=(1,1))
         cropped_input = resized_crop(input, i, j, h, w, size=(224,224))
+
         input = input.to(device)
         cropped_input = cropped_input.to(device)
+        
+        #  Calculate highest probability class for class-guided methods.
         idx = model(input).argmax().item()
 
-        #  Process saliency map
+        #  Process saliency maps.
         saliency_map = calculate_saliency(saliency_method, input, idx, is_backprop)
         cropped_saliency_map = calculate_saliency(saliency_method, cropped_input, idx, is_backprop)
+
+        #  Process same zoom/pan to original image's saliency map to line up with cropped_saliency_map.
         saliency_map = torch.from_numpy(saliency_map)
         saliency_map = resized_crop(saliency_map, i, j, h, w, size=(224,224))
         saliency_map = saliency_map.numpy()
+
+        #  Calculate the correlation.
         corr, _ = stats.spearmanr(cropped_saliency_map, saliency_map, axis=None)
+        
         #  Correlation is not defined for constant arrays, which can happen.
         #  Therefore we skip those.
         if corr:

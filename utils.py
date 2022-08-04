@@ -406,3 +406,38 @@ class CocoExplainabilityMeasurement(VisionDataset):
 
     def __len__(self) -> int:
         return len(self.ids)
+
+
+class CocoStability(VisionDataset):
+    def __init__(
+        self,
+        root: str,
+        annFile: str,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+        transforms: Optional[Callable] = None
+    ) -> None:
+        super().__init__(root, transforms, transform, target_transform)
+
+        self.coco = COCO(annFile)
+        self.ids = list(sorted(self.coco.imgs.keys()))
+        categories = self.coco.getCatIds()
+        self.num_categories = len(categories)
+        self.categories = {cat: idx for idx, cat in enumerate(categories)}
+
+    def _load_image(self, id: int) -> Image.Image:
+        path = self.coco.loadImgs(id)[0]["file_name"]
+        return Image.open(os.path.join(self.root, path)).convert("RGB")
+
+    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+        id = self.ids[index]
+        image = self._load_image(id)
+
+        #  Transform original image to normalized and center cropped.
+        if self.transform is not None:
+            image = self.transform(image)
+
+        return image
+
+    def __len__(self) -> int:
+        return len(self.ids)

@@ -81,6 +81,14 @@ def calculate_mass_within(
     return (mass_within / mass).item()
 
 
+def pointing_game_hit(
+    saliency_map: torch.tensor,
+    class_mask: torch.tensor
+) -> float:
+    max_idx = saliency_map.argmax()
+    return class_mask.flatten()[max_idx].item() 
+
+
 def reshape_transform_vit(tensor, dim=7):
     #  Needed for ViT but not for Swin
     if tensor.shape[1] == (dim * dim + 1):

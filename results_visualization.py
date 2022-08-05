@@ -25,12 +25,37 @@ def read_stability(path='./data/'):
     results = []
 
     for file in files:
-        if 'stability' not in file:
+        if 'stability' not in file or 'transformation' in file:
             continue
         with open(f'{path}{file}', 'r') as f:
             meta = file.split('_')
             model_name = meta[0]
             method = meta[-2]
+            res = np.array(json.load(f))
+            res = res[~np.isnan(res)]
+            mean = res.mean()
+            var = res.var()
+            results.append(dict(
+                model_name=model_name,
+                method=method,
+                mean=mean,
+                var=var
+            ))
+    
+    return pd.DataFrame.from_records(results).sort_values(by=['method', 'model_name'])
+
+
+def read_transformation_stability(path='./data/'):
+    files = os.listdir(path)
+    results = []
+
+    for file in files:
+        if 'transformation_stability' not in file:
+            continue
+        with open(f'{path}{file}', 'r') as f:
+            meta = file.split('-')
+            model_name = meta[0]
+            method = meta[1]
             res = np.array(json.load(f))
             res = res[~np.isnan(res)]
             mean = res.mean()
@@ -178,5 +203,5 @@ def plot_binned_weighting_game(data):
 
 
 if __name__ == '__main__':
-    data = read_weighting_game()
-    plot_binned_weighting_game(data)
+    data = read_transformation_stability()
+    plot_stability(data)

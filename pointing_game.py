@@ -37,11 +37,6 @@ def measure_pointing_game(
 
         for idx, target in class_to_targets.items():
             mask = target['mask'].to(device=device, dtype=torch.bool)
-            object_area = mask.sum().item()
-
-            #  Skip if object(s) are less than 100 pixels by size
-            if object_area <= 100:
-                continue
 
             #  Process saliency map
             if is_backprop:
@@ -56,7 +51,7 @@ def measure_pointing_game(
 
             #  Calculate whether maximum saliency point is within correct class.
             hit = pointing_game_hit(saliency_map, mask)
-            results.append(hit)
+            accuracy.append(hit)
     
     return accuracy
 

@@ -76,7 +76,7 @@ if __name__ == '__main__':
                         choices=[
                             'vit_b_32', 'vit_b_16', 'vit_l_32', 'vit_l_16',
                             'vgg16', 'vgg19', 'vgg16_bn', 'vgg19_bn',
-                            'resnet50', 'resnet101', 'resnet152'
+                            'resnet50', 'resnet101', 'resnet152', 'swin_t'
                         ])
     parser.add_argument('--method', type=str, default='gradcam',
                         choices=['gradcam', 'gradcam++',

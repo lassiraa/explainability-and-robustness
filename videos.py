@@ -4,6 +4,7 @@ import moviepy.editor as mpy
 import torch
 import torchvision.transforms as transforms
 import numpy as np
+from scipy import stats
 from pytorch_grad_cam import GradCAM, \
     ScoreCAM, \
     GradCAMPlusPlus, \
@@ -16,6 +17,7 @@ from pytorch_grad_cam import GradCAM, \
 from pytorch_grad_cam.ablation_layer import AblationLayerVit
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 from pytorch_grad_cam.utils.image import show_cam_on_image
+import cv2
 
 from utils import reshape_transform_vit, load_model_with_target_layers
 
@@ -29,6 +31,8 @@ def process_video(
     image_normalize: transforms.Normalize
 ) -> tuple[np.ndarray]:
     frames = []
+    corrs = []
+    prev_saliency = None
 
     for frame in video.iter_frames():
         #  Preprocess frame for network
@@ -45,10 +49,17 @@ def process_video(
             mask=saliency_map,
             use_rgb=True
         )
+        if prev_saliency is not None:
+            corr, _ = stats.spearmanr(prev_saliency, saliency_map, axis=None)
+            corrs.append(corr)
+        else:
+            corrs.append(0)
+        
+        prev_saliency = np.copy(saliency_map)
         #  Add frame to cam visualization video
         frames.append(cam_frame)
     
-    return frames
+    return frames, corrs
 
 
 if __name__ == '__main__':
@@ -129,12 +140,11 @@ if __name__ == '__main__':
     #  Read video and find highest probability class from first frame.
     #  Class ID is used for CAM visualization
     video = mpy.VideoFileClip(f'/media/lassi/Data/datasets/coco/3d-effect-videos/val2017/{args.in_path}')
-    fname = args.in_path.split('.')[0]
     start_frame = image_transform(video.get_frame(0)).to(device).unsqueeze(0)
     start_output = model(start_frame)
     class_idx = start_output.argmax().item()
 
-    cam_frames = process_video(
+    cam_frames, corrs = process_video(
         video=video,
         device=device,
         saliency_method=saliency_method,
@@ -143,5 +153,16 @@ if __name__ == '__main__':
         image_normalize=image_normalize
     )
 
-    out_video = mpy.ImageSequenceClip(cam_frames, fps=25)
-    out_video.write_videofile(f'./stability_videos/{fname}_{args.method}_{args.model_name}_{class_idx}.mp4')
+    fname = args.in_path.split('.')[0]
+    corr_mean = []
+
+    for i, frame in enumerate(cam_frames):
+        if i > 5:
+            print(np.mean(corr_mean))
+            break
+        corr = corrs[i]
+        corr_str = str(round(corr*1000))
+        if corr != 0:
+            corr_mean.append(corr)
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(f'./stability_examples/{fname}_{args.method}_{args.model_name}_{class_idx}_{i}_{corr_str}.jpg', frame)

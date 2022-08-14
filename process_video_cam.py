@@ -4,6 +4,7 @@ import moviepy.editor as mpy
 import torch
 import torchvision.transforms as transforms
 import numpy as np
+from scipy import stats
 from pytorch_grad_cam import GradCAM, \
     ScoreCAM, \
     GradCAMPlusPlus, \
@@ -29,6 +30,8 @@ def process_video(
     image_normalize: transforms.Normalize
 ) -> tuple[np.ndarray]:
     frames = []
+    corrs = []
+    prev_saliency = None
 
     for frame in video.iter_frames():
         #  Preprocess frame for network
@@ -45,10 +48,17 @@ def process_video(
             mask=saliency_map,
             use_rgb=True
         )
+        if prev_saliency is not None:
+            corr, _ = stats.spearmanr(prev_saliency, saliency_map, axis=None)
+            corrs.append(corr)
+        else:
+            corrs.append(0)
+        
+        prev_saliency = np.copy(saliency_map)
         #  Add frame to cam visualization video
         frames.append(cam_frame)
     
-    return frames
+    return frames, corrs
 
 
 if __name__ == '__main__':
@@ -56,6 +66,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Create CAM visualization of video for highest prob. class')
     parser.add_argument('--in_path', type=str, required=True,
                         help='path to input video')
+    parser.add_argument('--class_idx', type=int, required=True)
     parser.add_argument('--batch_size', type=int, default=32,
                         help='batch size for cam methods')
     parser.add_argument('--num_workers', type=int, default=16,
@@ -128,13 +139,14 @@ if __name__ == '__main__':
     
     #  Read video and find highest probability class from first frame.
     #  Class ID is used for CAM visualization
-    video = mpy.VideoFileClip(f'/media/lassi/Data/datasets/coco/3d-effect-videos/val2017/{args.in_path}')
+    video = mpy.VideoFileClip(f'./stability_videos/{args.in_path}')
     fname = args.in_path.split('.')[0]
     start_frame = image_transform(video.get_frame(0)).to(device).unsqueeze(0)
     start_output = model(start_frame)
-    class_idx = start_output.argmax().item()
+    #class_idx = start_output.argmax().item()
+    class_idx = args.class_idx
 
-    cam_frames = process_video(
+    cam_frames, corrs = process_video(
         video=video,
         device=device,
         saliency_method=saliency_method,
@@ -142,6 +154,9 @@ if __name__ == '__main__':
         image_transform=image_transform,
         image_normalize=image_normalize
     )
+    
+    mean_corr = np.nanmean(corrs)
+    corr_str = str(round(mean_corr*1000))
 
     out_video = mpy.ImageSequenceClip(cam_frames, fps=25)
-    out_video.write_videofile(f'./stability_videos/{fname}_{args.method}_{args.model_name}_{class_idx}.mp4')
+    out_video.write_videofile(f'./stability_videos/{fname}_{args.method}_{args.model_name}_{class_idx}_{corr_str}.mp4')

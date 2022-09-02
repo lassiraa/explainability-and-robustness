@@ -1,4 +1,4 @@
-# shape-robustness
+# Evaluation of explainability methods and robustness in image classification
 Shape robustness exploration for ViT/CNN architectures
 
 - fine_tune.py for fine tuning selected model to COCO dataset via multilabel classification. Currently supports ViT, VGG and ResNet models from torchvision pretrained models.
